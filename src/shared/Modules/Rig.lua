@@ -121,6 +121,9 @@ local function skeleton(model, s, prop, colors)
 	local headCenter = V3(0, hip + torsoSize.Y + 0.15 * s + headD / 2, 0)
 	local head = ball(model, "Head", headD, headCenter, colors.skin)
 	motor("Neck", torso, head, CF(0, torsoSize.Y / 2, 0), CF(0, -(0.15 * s + headD / 2), 0))
+	for _, side in ipairs({ -1, 1 }) do
+		weld(head, ball(model, "Ear", headD * 0.22, headCenter + V3(side * headD * 0.48, -0.05 * s, 0.05 * s), colors.skin))
+	end
 	weld(head, cylinder(model, "NeckPart", 0.5 * s, 0.8 * s, V3(0, hip + torsoSize.Y + 0.1 * s, 0), V3(0, 1, 0), colors.skin))
 
 	local shoulderX = torsoSize.X / 2 + armSize.X / 2 - 0.02 * s
@@ -133,6 +136,8 @@ local function skeleton(model, s, prop, colors)
 		motor(side < 0 and "LShoulder" or "RShoulder", torso, arm, CF(side * shoulderX, shoulderY, 0), CF(0, armSize.Y / 2 - 0.15 * s, 0))
 		local handPos = pivot - V3(0, armSize.Y - 0.1 * s, 0)
 		weld(arm, ball(model, name .. "Hand", armSize.X * 1.15, handPos, colors.hand))
+		-- Rounded shoulder so the arm blends into the torso.
+		weld(arm, ball(model, name .. "Shoulder", armSize.X * 1.3, pivot - V3(0, 0.05 * s, 0), colors.torso))
 		arms[side] = { part = arm, hand = handPos }
 	end
 
@@ -143,8 +148,14 @@ local function skeleton(model, s, prop, colors)
 		local leg = part(model, name, legSize, CF(x, hip - legSize.Y / 2, 0), colors.leg)
 		motor(side < 0 and "LHip" or "RHip", root, leg, CF(x, 0, 0), CF(0, legSize.Y / 2, 0))
 		weld(leg, part(model, name .. "Shoe", V3(legSize.X * 1.12, 0.6 * s, legSize.Z * 1.35), CF(x, 0.3 * s, -0.12 * s), colors.shoe))
+		weld(leg, ball(model, name .. "Toe", legSize.X * 1.05, V3(x, 0.32 * s, -0.55 * s), colors.shoe))
+		weld(leg, part(model, name .. "Cuff", V3(legSize.X * 1.2, 0.35 * s, legSize.Z * 1.2), CF(x, 0.75 * s, 0), colors.shoe:Lerp(WHITE, 0.25)))
 		legs[side] = leg
 	end
+	-- Pelvis bridges the legs and torso.
+	weld(torso, part(model, "Pelvis", V3(torsoSize.X * 0.96, 0.75 * s, torsoSize.Z * 0.98), CF(0, hip - 0.15 * s, 0), colors.leg))
+	-- Chest highlight panel gives the torso some shading.
+	weld(torso, part(model, "Chest", V3(torsoSize.X * 0.7, torsoSize.Y * 0.45, 0.06 * s), CF(0, hip + torsoSize.Y * 0.68, -torsoSize.Z / 2 - 0.02 * s), colors.torso:Lerp(WHITE, 0.12), { shadow = false }))
 
 	return {
 		s = s,
@@ -182,9 +193,16 @@ local function face(model, rig, eyeColor, angry, glowing)
 		if glowing then
 			weld(rig.head, part(model, "Eye", V3(0.3 * r, 0.42 * r, 0.08 * r), base, eyeColor, { material = Enum.Material.Neon, shadow = false }))
 		else
-			weld(rig.head, part(model, "EyeOuter", V3(0.32 * r, 0.56 * r, 0.06 * r), base, BLACK, { shadow = false }))
-			weld(rig.head, part(model, "Iris", V3(0.24 * r, 0.4 * r, 0.06 * r), base * CF(0, -0.05 * r, -0.03 * r), eyeColor, { shadow = false }))
-			weld(rig.head, part(model, "Shine", V3(0.09 * r, 0.13 * r, 0.04 * r), base * CF(-side * 0.04 * r, 0.12 * r, -0.06 * r), WHITE, { material = Enum.Material.Neon, shadow = false }))
+			weld(rig.head, part(model, "Sclera", V3(0.36 * r, 0.56 * r, 0.05 * r), base, WHITE, { shadow = false }))
+			weld(rig.head, part(model, "EyeOuter", V3(0.28 * r, 0.48 * r, 0.06 * r), base * CF(-side * 0.02 * r, -0.03 * r, -0.02 * r), BLACK, { shadow = false }))
+			weld(rig.head, part(model, "Iris", V3(0.22 * r, 0.36 * r, 0.06 * r), base * CF(-side * 0.02 * r, -0.07 * r, -0.04 * r), eyeColor, { shadow = false }))
+			weld(rig.head, part(model, "IrisLight", V3(0.16 * r, 0.12 * r, 0.05 * r), base * CF(-side * 0.02 * r, -0.17 * r, -0.06 * r), eyeColor:Lerp(WHITE, 0.45), { shadow = false }))
+			weld(rig.head, part(model, "Shine", V3(0.09 * r, 0.13 * r, 0.04 * r), base * CF(-side * 0.06 * r, 0.08 * r, -0.08 * r), WHITE, { material = Enum.Material.Neon, shadow = false }))
+			weld(rig.head, part(model, "Lash", V3(0.44 * r, 0.09 * r, 0.07 * r), base * CF(side * 0.02 * r, 0.27 * r, -0.03 * r) * CFrame.Angles(0, 0, -side * 0.18), BLACK, { shadow = false }))
+			if not angry then
+				local cheek, cheekNormal = surfacePoint(rig, side * 0.55 * r, -0.36 * r)
+				weld(rig.head, part(model, "Blush", V3(0.24 * r, 0.1 * r, 0.04 * r), CFrame.lookAt(cheek, cheek + cheekNormal), Color3.fromRGB(255, 130, 150), { transparency = 0.35, shadow = false }))
+			end
 		end
 		local browPos, browNormal = surfacePoint(rig, side * 0.38 * r, 0.42 * r)
 		local tilt = angry and side * 0.35 or -side * 0.12
@@ -220,6 +238,10 @@ local function hair(model, rig, style, color)
 	end
 	local capOffset = style == "Slick" and V3(0, 0.22 * r, 0.3 * r) or V3(0, 0.2 * r, 0.2 * r)
 	weld(rig.head, ball(model, "HairCap", r * 2.12, hc + capOffset, color))
+	weld(rig.head, ball(model, "HairVolume", r * 1.7, hc + V3(0, 0.35 * r, 0.55 * r), color:Lerp(BLACK, 0.08)))
+	for _, side in ipairs({ -1, 1 }) do
+		weld(rig.head, spike(model, "Sideburn", hc + V3(side * 0.9 * r, 0.35 * r, -0.2 * r), V3(side * 0.15, -1, -0.25), 0.75 * r, 0.32 * r, 0.32 * r, color))
+	end
 
 	if style == "Spiky" or style == "Wild" then
 		local wild = style == "Wild"
