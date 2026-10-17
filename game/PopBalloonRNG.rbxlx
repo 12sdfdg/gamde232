@@ -1,0 +1,3110 @@
+<roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.roblox.com/roblox.xsd" version="4">
+<Item class="Workspace" referent="RBX00000013"><Properties><string name="Name">Workspace</string></Properties></Item>
+<Item class="ReplicatedStorage" referent="RBX00000014"><Properties><string name="Name">ReplicatedStorage</string></Properties><Item class="Folder" referent="RBX00000003"><Properties><string name="Name">Shared</string></Properties><Item class="ModuleScript" referent="RBX00000001"><Properties><string name="Name">Config</string><ProtectedString name="Source"><![CDATA[-- Game balance and content. Edit freely: everything else reads from here.
+local Config = {}
+
+---------------------------------------------------------------------- map
+Config.PlotCount = 6
+Config.PlotSize = 140
+Config.GroundY = 2 -- top surface of every island
+Config.PathWidth = 10
+Config.PathClearance = 7.5 -- turrets must be this far from the path centre line
+Config.MinTurretSpacing = 5
+-- Balloon path in plot-local X/Z (studs), from the cave (start) to the hut (end)
+Config.PathPoints = {
+	Vector2.new(-55, -50),
+	Vector2.new(35, -50),
+	Vector2.new(35, -18),
+	Vector2.new(-35, -18),
+	Vector2.new(-35, 14),
+	Vector2.new(35, 14),
+	Vector2.new(35, 46),
+	Vector2.new(-55, 46),
+}
+
+---------------------------------------------------------------------- waves
+Config.StartingLives = 20
+Config.WaveBaseCount = 6
+Config.WaveCountPerWave = 2
+Config.WaveMaxCount = 80
+Config.SpawnInterval = 0.6
+Config.WaveBreak = 2.5
+Config.HpGrowth = 1.12 -- balloon HP multiplier per wave
+Config.RewardGrowth = 0.08 -- +8% reward per wave
+Config.WaveClearBonus = 10 -- coins * wave
+
+---------------------------------------------------------------------- rolling
+Config.RollCooldown = 1.5
+Config.RareAnnounceChance = 100 -- announce rolls of "1 in 100" or rarer to the server
+
+Config.RarityColors = {
+	Common = Color3.fromRGB(205, 205, 205),
+	Uncommon = Color3.fromRGB(85, 220, 95),
+	Rare = Color3.fromRGB(60, 150, 255),
+	Epic = Color3.fromRGB(175, 80, 255),
+	Legendary = Color3.fromRGB(255, 190, 30),
+	Mythic = Color3.fromRGB(255, 70, 90),
+	Divine = Color3.fromRGB(255, 255, 255),
+}
+
+-- Sorted from most common to rarest. chance = "1 in N".
+Config.Turrets = {
+	{ id = "Basic", name = "Basic Turret", chance = 2, rarity = "Common", damage = 4, range = 22, fireRate = 1.0, barrels = 1, color = Color3.fromRGB(120, 130, 150) },
+	{ id = "Double", name = "Double Turret", chance = 3, rarity = "Common", damage = 3, range = 22, fireRate = 2.0, barrels = 2, color = Color3.fromRGB(70, 120, 220) },
+	{ id = "Modern", name = "Modern Turret", chance = 6, rarity = "Uncommon", damage = 9, range = 26, fireRate = 1.3, barrels = 1, color = Color3.fromRGB(60, 190, 90) },
+	{ id = "Sniper", name = "Sniper Turret", chance = 15, rarity = "Rare", damage = 40, range = 60, fireRate = 0.4, barrels = 1, long = true, color = Color3.fromRGB(40, 60, 90) },
+	{ id = "Pirate", name = "Pirate Turret", chance = 40, rarity = "Rare", damage = 25, range = 28, fireRate = 1.0, barrels = 1, splash = 9, color = Color3.fromRGB(130, 85, 50) },
+	{ id = "Laser", name = "Laser Turret", chance = 120, rarity = "Epic", damage = 14, range = 34, fireRate = 5, barrels = 1, neon = true, color = Color3.fromRGB(255, 60, 200) },
+	{ id = "Viking", name = "Viking Turret", chance = 400, rarity = "Epic", damage = 90, range = 30, fireRate = 1.0, barrels = 2, splash = 10, color = Color3.fromRGB(190, 60, 40) },
+	{ id = "Ancient", name = "Ancient Turret", chance = 1500, rarity = "Legendary", damage = 180, range = 42, fireRate = 1.5, barrels = 3, neon = true, color = Color3.fromRGB(255, 200, 40) },
+	{ id = "Galaxy", name = "Galaxy Turret", chance = 12000, rarity = "Mythic", damage = 500, range = 52, fireRate = 2.0, barrels = 2, neon = true, splash = 12, color = Color3.fromRGB(90, 40, 200) },
+	{ id = "Divine", name = "Divine Turret", chance = 150000, rarity = "Divine", damage = 2000, range = 65, fireRate = 2.5, barrels = 3, neon = true, splash = 14, color = Color3.fromRGB(255, 250, 220) },
+}
+
+-- Sorted from most common to rarest.
+Config.Balloons = {
+	{ id = "Red", name = "Red Balloon", chance = 1, hp = 10, reward = 2, speed = 9, color = Color3.fromRGB(235, 40, 50) },
+	{ id = "Blue", name = "Blue Balloon", chance = 4, hp = 25, reward = 6, speed = 10, color = Color3.fromRGB(40, 110, 240) },
+	{ id = "Green", name = "Green Balloon", chance = 10, hp = 60, reward = 15, speed = 11, color = Color3.fromRGB(50, 200, 70) },
+	{ id = "Yellow", name = "Yellow Balloon", chance = 30, hp = 150, reward = 40, speed = 13, color = Color3.fromRGB(255, 215, 30) },
+	{ id = "Pink", name = "Pink Balloon", chance = 100, hp = 400, reward = 120, speed = 14, color = Color3.fromRGB(255, 100, 190) },
+	{ id = "Black", name = "Black Balloon", chance = 500, hp = 1500, reward = 500, speed = 8, size = 1.3, lives = 3, color = Color3.fromRGB(30, 30, 35) },
+	{ id = "Rainbow", name = "Rainbow Balloon", chance = 5000, hp = 6000, reward = 3000, speed = 11, size = 1.4, lives = 5, rainbow = true, color = Color3.fromRGB(255, 0, 0) },
+	{ id = "Golden", name = "Golden Balloon", chance = 50000, hp = 25000, reward = 25000, speed = 9, size = 1.5, lives = 8, golden = true, color = Color3.fromRGB(255, 200, 40) },
+	{ id = "Mystery", name = "??? Balloon", chance = 52995392255, hp = 1000000, reward = 100000000, speed = 5, size = 2.2, lives = 20, mystery = true, color = Color3.fromRGB(245, 245, 250) },
+}
+
+---------------------------------------------------------------------- upgrades (skill tree)
+-- effect keys are interpreted by Config.GetStats below
+Config.Upgrades = {
+	{ id = "CoinsI", name = "Coins I", icon = "💰", desc = "+25% coins", cost = 250, effect = { coins = 0.25 } },
+	{ id = "LuckI", name = "Luck I", icon = "🍀", desc = "x1.5 luck", cost = 400, effect = { luck = 1.5 } },
+	{ id = "RollSpeedI", name = "Roll Speed I", icon = "🎲", desc = "Roll 30% faster", cost = 600, effect = { roll = 0.7 } },
+	{ id = "DamageI", name = "Damage I", icon = "💥", desc = "+25% turret damage", cost = 800, effect = { damage = 0.25 } },
+	{ id = "AutoRoll", name = "Auto Roll", icon = "🔁", desc = "Unlock auto rolling", cost = 1500, requires = "RollSpeedI", effect = { autoRoll = true } },
+	{ id = "CoinsII", name = "Coins II", icon = "💰", desc = "+50% coins", cost = 2500, requires = "CoinsI", effect = { coins = 0.5 } },
+	{ id = "SlotsI", name = "Slots I", icon = "🧱", desc = "+4 turret slots", cost = 3000, effect = { slots = 4 } },
+	{ id = "LuckII", name = "Luck II", icon = "🍀", desc = "x2 luck", cost = 5000, requires = "LuckI", effect = { luck = 2 } },
+	{ id = "WaveSpeed", name = "X2 Wave Speed", icon = "⏩", desc = "Waves come twice as fast", cost = 5000, effect = { waveSpeed = 2 } },
+	{ id = "BonusI", name = "Bonus I", icon = "🎁", desc = "x2 wave clear bonus", cost = 10000, requires = "CoinsII", effect = { bonus = 1 } },
+	{ id = "DamageII", name = "Damage II", icon = "💥", desc = "+50% turret damage", cost = 12000, requires = "DamageI", effect = { damage = 0.5 } },
+	{ id = "RollSpeedII", name = "Roll Speed II", icon = "🎲", desc = "Roll 40% faster", cost = 15000, requires = "RollSpeedI", effect = { roll = 0.6 } },
+	{ id = "SlotsII", name = "Slots II", icon = "🧱", desc = "+6 turret slots", cost = 20000, requires = "SlotsI", effect = { slots = 6 } },
+	{ id = "LuckIII", name = "Luck III", icon = "🍀", desc = "x3 luck", cost = 50000, requires = "LuckII", effect = { luck = 3 } },
+	{ id = "CoinsIII", name = "Coins III", icon = "💰", desc = "+100% coins", cost = 100000, requires = "CoinsII", effect = { coins = 1 } },
+}
+
+Config.BaseMaxTurrets = 8
+Config.SwordDamage = 6
+
+---------------------------------------------------------------------- sounds
+-- Built-in Roblox sounds as fallbacks. Upload the SFX pack (sfx_pack/ogg) to
+-- Roblox and paste the rbxassetid://... ids here to use the custom sounds.
+Config.Sounds = {
+	Pop = "rbxasset://sounds/electronicpingshort.wav",
+	Click = "rbxasset://sounds/button.wav",
+	Roll = "rbxasset://sounds/clickfast.wav",
+	RareRoll = "rbxasset://sounds/electronicpingshort.wav",
+	Slash = "rbxasset://sounds/swordslash.wav",
+	Place = "rbxasset://sounds/button.wav",
+	WaveClear = "",
+	Buy = "rbxasset://sounds/electronicpingshort.wav",
+	Lose = "",
+}
+
+---------------------------------------------------------------------- helpers
+local byId = {}
+for _, list in { Config.Turrets, Config.Balloons, Config.Upgrades } do
+	for _, def in list do
+		byId[def.id] = def
+	end
+end
+
+function Config.Get(id)
+	return byId[id]
+end
+
+-- Combined effect of owned upgrades. `owned` is a set { [upgradeId] = true }.
+function Config.GetStats(owned)
+	local stats = {
+		coinMult = 1,
+		luck = 1,
+		rollCooldown = Config.RollCooldown,
+		damageMult = 1,
+		maxTurrets = Config.BaseMaxTurrets,
+		waveSpeed = 1,
+		bonusMult = 1,
+		autoRoll = false,
+	}
+	for _, up in Config.Upgrades do
+		if owned and owned[up.id] then
+			local e = up.effect
+			if e.coins then stats.coinMult += e.coins end
+			if e.luck then stats.luck *= e.luck end
+			if e.roll then stats.rollCooldown *= e.roll end
+			if e.damage then stats.damageMult += e.damage end
+			if e.slots then stats.maxTurrets += e.slots end
+			if e.waveSpeed then stats.waveSpeed *= e.waveSpeed end
+			if e.bonus then stats.bonusMult += e.bonus end
+			if e.autoRoll then stats.autoRoll = true end
+		end
+	end
+	return stats
+end
+
+return Config
+]]></ProtectedString></Properties></Item>
+<Item class="ModuleScript" referent="RBX00000002"><Properties><string name="Name">Util</string><ProtectedString name="Source"><![CDATA[local Config = require(script.Parent.Config)
+
+local Util = {}
+
+local SUFFIXES = { "", "K", "M", "B", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No", "Dc" }
+
+function Util.Abbrev(n: number): string
+	n = math.floor(n)
+	if math.abs(n) < 1000 then
+		return tostring(n)
+	end
+	local i = 1
+	local v = n
+	while math.abs(v) >= 1000 and i < #SUFFIXES do
+		v /= 1000
+		i += 1
+	end
+	local s = if math.abs(v) >= 100 then string.format("%d", v) else string.format("%.1f", v)
+	s = s:gsub("%.0$", "")
+	return s .. SUFFIXES[i]
+end
+
+function Util.Commas(n: number): string
+	local s = string.format("%d", math.floor(n))
+	local formatted, k = s, 0
+	repeat
+		formatted, k = formatted:gsub("^(-?%d+)(%d%d%d)", "%1,%2")
+	until k == 0
+	return formatted
+end
+
+-- RNG pick: try the rarest entries first with probability luck / chance.
+-- `list` must be sorted from most common to rarest; list[1] is the fallback.
+function Util.RollFrom(list, luck: number, rng: Random?)
+	local r = rng or Random.new()
+	for i = #list, 2, -1 do
+		local item = list[i]
+		if r:NextNumber() < math.min(1, luck / item.chance) then
+			return item
+		end
+	end
+	return list[1]
+end
+
+-- Shortest distance from a plot-local XZ point to the balloon path.
+function Util.DistToPath(p: Vector2): number
+	local best = math.huge
+	local pts = Config.PathPoints
+	for i = 1, #pts - 1 do
+		local a, b = pts[i], pts[i + 1]
+		local ab = b - a
+		local t = math.clamp((p - a):Dot(ab) / ab:Dot(ab), 0, 1)
+		local d = (p - (a + ab * t)).Magnitude
+		if d < best then
+			best = d
+		end
+	end
+	return best
+end
+
+-- Shared placement rule (server enforces, client previews).
+-- origin: plot centre (Vector3); pos: world position; others: list of Vector3 turret positions.
+function Util.CanPlace(origin: Vector3, pos: Vector3, others: { Vector3 }): (boolean, string?)
+	local lx, lz = pos.X - origin.X, pos.Z - origin.Z
+	local half = Config.PlotSize / 2 - 3
+	if math.abs(lx) > half or math.abs(lz) > half then
+		return false, "Place turrets on your own base!"
+	end
+	if Util.DistToPath(Vector2.new(lx, lz)) < Config.PathClearance then
+		return false, "Too close to the path"
+	end
+	for _, o in others do
+		if (Vector2.new(o.X, o.Z) - Vector2.new(pos.X, pos.Z)).Magnitude < Config.MinTurretSpacing then
+			return false, "Too close to another turret"
+		end
+	end
+	return true, nil
+end
+
+function Util.ChanceText(chance: number): string
+	return "1 in " .. Util.Commas(chance)
+end
+
+return Util
+]]></ProtectedString></Properties></Item>
+</Item>
+</Item>
+<Item class="ServerScriptService" referent="RBX00000015"><Properties><string name="Name">ServerScriptService</string></Properties><Item class="Folder" referent="RBX0000000C"><Properties><string name="Name">Server</string></Properties><Item class="ModuleScript" referent="RBX00000004"><Properties><string name="Name">DataService</string><ProtectedString name="Source"><![CDATA[-- Player data: load/save (DataStore), leaderstats and syncing to the client.
+local DataStoreService = game:GetService("DataStoreService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage.Shared.Config)
+
+local DataService = {}
+
+local STORE_NAME = "PopBalloonRNG_v1"
+local store = nil
+do
+	local ok, result = pcall(function()
+		return DataStoreService:GetDataStore(STORE_NAME)
+	end)
+	if ok then
+		store = result
+	else
+		warn("[Data] DataStore unavailable (enable Studio API access to save):", result)
+	end
+end
+
+local profiles: { [Player]: any } = {}
+local dirty: { [Player]: boolean } = {}
+local remotes: any
+
+local function defaultData()
+	return {
+		coins = 0,
+		bestWave = 0,
+		rolls = 0,
+		popped = 0,
+		inventory = { Basic = 1 },
+		discovered = { Basic = true },
+		upgrades = {},
+	}
+end
+
+local function reconcile(data, template)
+	for k, v in template do
+		if data[k] == nil then
+			data[k] = if type(v) == "table" then table.clone(v) else v
+		end
+	end
+	return data
+end
+
+function DataService.Init(remoteFolder: Folder)
+	remotes = remoteFolder
+	-- batched sync so coin spam does not flood the network
+	task.spawn(function()
+		while true do
+			task.wait(0.25)
+			for player in dirty do
+				dirty[player] = nil
+				DataService.Sync(player)
+			end
+		end
+	end)
+	-- autosave
+	task.spawn(function()
+		while true do
+			task.wait(120)
+			for player in profiles do
+				task.spawn(DataService.Save, player)
+			end
+		end
+	end)
+end
+
+function DataService.Load(player: Player)
+	local data = nil
+	if store then
+		local ok, result = pcall(function()
+			return store:GetAsync("u_" .. player.UserId)
+		end)
+		if ok and type(result) == "table" then
+			data = result
+		elseif not ok then
+			warn("[Data] load failed for", player.Name, result)
+		end
+	end
+	data = reconcile(data or {}, defaultData())
+	profiles[player] = data
+
+	local ls = Instance.new("Folder")
+	ls.Name = "leaderstats"
+	for _, name in { "Coins", "Best Wave", "Rolls" } do
+		local v = Instance.new("NumberValue")
+		v.Name = name
+		v.Parent = ls
+	end
+	ls.Parent = player
+	DataService.UpdateLeaderstats(player)
+	DataService.Sync(player)
+	return data
+end
+
+function DataService.Get(player: Player)
+	return profiles[player]
+end
+
+function DataService.Stats(player: Player)
+	local data = profiles[player]
+	return Config.GetStats(data and data.upgrades)
+end
+
+function DataService.UpdateLeaderstats(player: Player)
+	local data = profiles[player]
+	local ls = player:FindFirstChild("leaderstats")
+	if not data or not ls then
+		return
+	end
+	(ls :: any).Coins.Value = data.coins;
+	(ls :: any)["Best Wave"].Value = data.bestWave;
+	(ls :: any).Rolls.Value = data.rolls
+end
+
+function DataService.MarkDirty(player: Player)
+	dirty[player] = true
+end
+
+function DataService.Sync(player: Player)
+	local data = profiles[player]
+	if data and player.Parent then
+		DataService.UpdateLeaderstats(player)
+		remotes.DataChanged:FireClient(player, data, DataService.Stats(player))
+	end
+end
+
+function DataService.AddCoins(player: Player, amount: number)
+	local data = profiles[player]
+	if data then
+		data.coins += amount
+		DataService.MarkDirty(player)
+	end
+end
+
+function DataService.Save(player: Player)
+	local data = profiles[player]
+	if not data or not store then
+		return
+	end
+	local ok, err = pcall(function()
+		store:SetAsync("u_" .. player.UserId, data)
+	end)
+	if not ok then
+		warn("[Data] save failed for", player.Name, err)
+	end
+end
+
+function DataService.Release(player: Player)
+	DataService.Save(player)
+	profiles[player] = nil
+	dirty[player] = nil
+end
+
+function DataService.All()
+	return profiles
+end
+
+return DataService
+]]></ProtectedString></Properties></Item>
+<Item class="ModuleScript" referent="RBX00000005"><Properties><string name="Name">LeaderboardService</string><ProtectedString name="Source"><![CDATA[-- Global leaderboards (OrderedDataStore) shown on the boards in the hub.
+local DataStoreService = game:GetService("DataStoreService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Util = require(ReplicatedStorage.Shared.Util)
+local DataService = require(script.Parent.DataService)
+
+local LeaderboardService = {}
+
+local KEYS = {
+	BestWave = "bestWave",
+	TopRolls = "rolls",
+	TopCoins = "coins",
+}
+local REFRESH = 60
+
+local names: { [number]: string } = {}
+local function nameOf(userId: number): string
+	if names[userId] then
+		return names[userId]
+	end
+	local ok, name = pcall(function()
+		return Players:GetNameFromUserIdAsync(userId)
+	end)
+	names[userId] = if ok then name else ("Player " .. userId)
+	return names[userId]
+end
+
+local function getStore(key: string)
+	local ok, store = pcall(function()
+		return DataStoreService:GetOrderedDataStore("LB_" .. key)
+	end)
+	return if ok then store else nil
+end
+
+local function render(board: BasePart, entries: { { name: string, value: number } })
+	local gui = board:FindFirstChild("Gui")
+	if not gui then
+		return
+	end
+	for i = 1, 10 do
+		local row = gui:FindFirstChild("Row" .. i) :: TextLabel?
+		if row then
+			local e = entries[i]
+			row.Text = if e then string.format("  #%d  %s  —  %s", i, e.name, Util.Abbrev(e.value)) else string.format("  #%d  ---", i)
+			row.TextColor3 = if i == 1 then Color3.fromRGB(255, 215, 60) elseif i == 2 then Color3.fromRGB(220, 220, 230) elseif i == 3 then Color3.fromRGB(230, 150, 90) else Color3.new(1, 1, 1)
+		end
+	end
+end
+
+-- Fallback when DataStores are unavailable (e.g. Studio without API access): show online players.
+local function localEntries(field: string)
+	local entries = {}
+	for player, data in DataService.All() do
+		table.insert(entries, { name = player.DisplayName, value = data[field] or 0 })
+	end
+	table.sort(entries, function(a, b)
+		return a.value > b.value
+	end)
+	return entries
+end
+
+local function refresh(boards: { [string]: BasePart })
+	for key, field in KEYS do
+		local board = boards[key]
+		if board then
+			local store = getStore(key)
+			local entries = nil
+			if store then
+				for player, data in DataService.All() do
+					pcall(function()
+						store:SetAsync(tostring(player.UserId), math.floor(data[field] or 0))
+					end)
+				end
+				local ok, pages = pcall(function()
+					return store:GetSortedAsync(false, 10)
+				end)
+				if ok and pages then
+					entries = {}
+					for _, item in pages:GetCurrentPage() do
+						table.insert(entries, { name = nameOf(tonumber(item.key) or 0), value = item.value })
+					end
+				end
+			end
+			render(board, entries or localEntries(field))
+		end
+	end
+end
+
+function LeaderboardService.Start(boards: { [string]: BasePart })
+	task.spawn(function()
+		task.wait(5)
+		while true do
+			refresh(boards)
+			task.wait(REFRESH)
+		end
+	end)
+end
+
+return LeaderboardService
+]]></ProtectedString></Properties></Item>
+<Item class="Script" referent="RBX00000006"><Properties><string name="Name">Main</string><ProtectedString name="Source"><![CDATA[-- Server entry point: builds the map, wires remotes and player lifecycle.
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage.Shared.Config)
+local DataService = require(script.Parent.DataService)
+local LeaderboardService = require(script.Parent.LeaderboardService)
+local MapBuilder = require(script.Parent.MapBuilder)
+local PlotService = require(script.Parent.PlotService)
+local RollService = require(script.Parent.RollService)
+local TurretService = require(script.Parent.TurretService)
+local WaveService = require(script.Parent.WaveService)
+
+---------------------------------------------------------------------- remotes
+local remotes = Instance.new("Folder")
+remotes.Name = "Remotes"
+local function remote(className: string, name: string)
+	local r = Instance.new(className)
+	r.Name = name
+	r.Parent = remotes
+	return r
+end
+local Roll = remote("RemoteFunction", "Roll") :: RemoteFunction
+local Place = remote("RemoteFunction", "Place") :: RemoteFunction
+local BuyUpgrade = remote("RemoteFunction", "BuyUpgrade") :: RemoteFunction
+local StartWaves = remote("RemoteEvent", "StartWaves") :: RemoteEvent
+local RemoveAll = remote("RemoteEvent", "RemoveAll") :: RemoteEvent
+local RemoveTurret = remote("RemoteEvent", "RemoveTurret") :: RemoteEvent
+local GoHome = remote("RemoteEvent", "GoHome") :: RemoteEvent
+remote("RemoteEvent", "DataChanged")
+remote("RemoteEvent", "WaveState")
+remote("RemoteEvent", "Popped")
+remote("RemoteEvent", "Shot")
+remote("RemoteEvent", "Notify")
+remote("RemoteEvent", "PlaySound")
+remotes.Parent = ReplicatedStorage
+
+---------------------------------------------------------------------- world
+local plotModels, boards = MapBuilder.Build()
+PlotService.Init(plotModels)
+DataService.Init(remotes)
+WaveService.Init(remotes)
+TurretService.Init(remotes)
+RollService.Init(remotes)
+LeaderboardService.Start(boards)
+
+---------------------------------------------------------------------- sword
+local function makeSword(): Tool
+	local tool = Instance.new("Tool")
+	tool.Name = "Popper Sword"
+	tool.CanBeDropped = false
+	tool.GripPos = Vector3.new(0, -1.6, 0)
+	local handle = Instance.new("Part")
+	handle.Name = "Handle"
+	handle.Size = Vector3.new(0.6, 4.5, 0.25)
+	handle.Color = Color3.fromRGB(80, 200, 255)
+	handle.Material = Enum.Material.Neon
+	handle.CanCollide = false
+	handle.Parent = tool
+	local guard = Instance.new("Part")
+	guard.Name = "Guard"
+	guard.Size = Vector3.new(1.6, 0.3, 0.5)
+	guard.Color = Color3.fromRGB(255, 200, 50)
+	guard.CanCollide = false
+	guard.Massless = true
+	guard.CFrame = handle.CFrame * CFrame.new(0, -1.2, 0)
+	guard.Parent = tool
+	local w = Instance.new("WeldConstraint")
+	w.Part0 = handle
+	w.Part1 = guard
+	w.Parent = guard
+	local sound = Instance.new("Sound")
+	sound.Name = "Slash"
+	sound.SoundId = Config.Sounds.Slash
+	sound.Volume = 0.6
+	sound.Parent = handle
+
+	local last = 0
+	tool.Activated:Connect(function()
+		local now = os.clock()
+		if now - last < 0.35 then
+			return
+		end
+		last = now
+		local char = tool.Parent
+		local player = char and Players:GetPlayerFromCharacter(char)
+		local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
+		if not player or not root then
+			return
+		end
+		local anim = Instance.new("StringValue")
+		anim.Name = "toolanim"
+		anim.Value = "Slash"
+		anim.Parent = tool
+		game:GetService("Debris"):AddItem(anim, 1)
+		sound:Play()
+		local plot = PlotService.Get(player)
+		if not plot then
+			return
+		end
+		local stats = DataService.Stats(player)
+		local front = root.Position + root.CFrame.LookVector * 4 + Vector3.new(0, 3, 0)
+		for _, b in WaveService.BalloonsNear(plot, front, 8) do
+			WaveService.Damage(b, Config.SwordDamage * stats.damageMult, player)
+		end
+	end)
+	return tool
+end
+
+---------------------------------------------------------------------- players
+local function onCharacter(player: Player, char: Model)
+	task.wait(0.2)
+	PlotService.TeleportHome(player)
+	local backpack = player:FindFirstChildOfClass("Backpack")
+	if backpack and not backpack:FindFirstChild("Popper Sword") and not char:FindFirstChild("Popper Sword") then
+		makeSword().Parent = backpack
+	end
+end
+
+local function onPlayerAdded(player: Player)
+	DataService.Load(player)
+	if not player.Parent then
+		DataService.Release(player)
+		return
+	end
+	local plot = PlotService.Assign(player)
+	if not plot then
+		player:Kick("Server is full, please join another server.")
+		return
+	end
+	player.CharacterAdded:Connect(function(char)
+		onCharacter(player, char)
+	end)
+	if player.Character then
+		task.spawn(onCharacter, player, player.Character)
+	end
+	WaveService.SendState(plot)
+end
+
+Players.PlayerAdded:Connect(onPlayerAdded)
+for _, p in Players:GetPlayers() do
+	task.spawn(onPlayerAdded, p)
+end
+
+Players.PlayerRemoving:Connect(function(player)
+	local plot = PlotService.Get(player)
+	if plot then
+		WaveService.Stop(plot)
+		TurretService.Clear(plot)
+	end
+	PlotService.Release(player)
+	RollService.Forget(player)
+	DataService.Release(player)
+end)
+
+game:BindToClose(function()
+	for _, player in Players:GetPlayers() do
+		task.spawn(DataService.Save, player)
+	end
+	task.wait(3)
+end)
+
+---------------------------------------------------------------------- remote handlers
+Roll.OnServerInvoke = function(player)
+	return RollService.Roll(player)
+end
+
+Place.OnServerInvoke = function(player, id, pos, yaw)
+	local ok, reason = TurretService.Place(player, id, pos, yaw)
+	return ok, reason
+end
+
+BuyUpgrade.OnServerInvoke = function(player, id)
+	return RollService.BuyUpgrade(player, id)
+end
+
+StartWaves.OnServerEvent:Connect(function(player)
+	WaveService.Start(player)
+end)
+
+RemoveAll.OnServerEvent:Connect(function(player)
+	local plot = PlotService.Get(player)
+	if plot then
+		TurretService.Clear(plot)
+	end
+end)
+
+RemoveTurret.OnServerEvent:Connect(function(player, model)
+	if typeof(model) == "Instance" then
+		TurretService.Remove(player, model)
+	end
+end)
+
+GoHome.OnServerEvent:Connect(function(player)
+	PlotService.TeleportHome(player)
+end)
+]]></ProtectedString></Properties></Item>
+<Item class="ModuleScript" referent="RBX00000007"><Properties><string name="Name">MapBuilder</string><ProtectedString name="Source"><![CDATA[-- Builds the tropical map at runtime: water, hub island, player plots with
+-- balloon paths, caves, huts, palm trees, bridges and leaderboard boards.
+local Lighting = game:GetService("Lighting")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage.Shared.Config)
+
+local MapBuilder = {}
+
+local SAND = Color3.fromRGB(240, 222, 175)
+local SAND_DARK = Color3.fromRGB(226, 203, 150)
+local PATH_A = Color3.fromRGB(232, 205, 150)
+local PATH_B = Color3.fromRGB(222, 190, 130)
+local ROCK = Color3.fromRGB(130, 130, 140)
+local WOOD = Color3.fromRGB(150, 100, 60)
+local LEAF = Color3.fromRGB(70, 175, 70)
+local GRASS = Color3.fromRGB(110, 190, 80)
+
+local rng = Random.new(1234)
+
+local function part(props)
+	local p = Instance.new("Part")
+	p.Anchored = true
+	p.TopSurface = Enum.SurfaceType.Smooth
+	p.BottomSurface = Enum.SurfaceType.Smooth
+	p.Material = Enum.Material.SmoothPlastic
+	for k, v in props do
+		(p :: any)[k] = v
+	end
+	return p
+end
+
+local function palm(parent: Instance, base: Vector3, height: number?)
+	local model = Instance.new("Model")
+	model.Name = "Palm"
+	local h = height or rng:NextNumber(14, 22)
+	local segs = 6
+	local lean = rng:NextNumber(-0.25, 0.25)
+	local leanZ = rng:NextNumber(-0.25, 0.25)
+	local pos = base
+	for i = 1, segs do
+		local step = Vector3.new(lean * i * 0.4, h / segs, leanZ * i * 0.4)
+		local nextPos = pos + step
+		local mid = (pos + nextPos) / 2
+		local r = 1.6 - i * 0.12
+		part({
+			Name = "Trunk",
+			Shape = Enum.PartType.Cylinder,
+			Size = Vector3.new(step.Magnitude + 0.3, r * 2, r * 2),
+			CFrame = CFrame.lookAt(mid, nextPos) * CFrame.Angles(0, math.rad(90), 0),
+			Color = if i % 2 == 0 then WOOD else Color3.fromRGB(165, 115, 70),
+			Material = Enum.Material.Wood,
+			CanCollide = i <= 2,
+			Parent = model,
+		})
+		pos = nextPos
+	end
+	local top = pos
+	local leaves = 7
+	for i = 1, leaves do
+		local yaw = (i / leaves) * math.pi * 2 + rng:NextNumber(-0.2, 0.2)
+		local len = rng:NextNumber(9, 12)
+		local leaf = part({
+			Name = "Leaf",
+			Size = Vector3.new(3.2, 0.4, len),
+			Color = if i % 2 == 0 then LEAF else Color3.fromRGB(90, 195, 80),
+			Material = Enum.Material.Grass,
+			CanCollide = false,
+			Parent = model,
+		})
+		leaf.CFrame = CFrame.new(top) * CFrame.Angles(0, yaw, 0) * CFrame.Angles(math.rad(-22), 0, 0) * CFrame.new(0, 0, -len / 2)
+	end
+	for i = 1, 3 do
+		part({
+			Name = "Coconut",
+			Shape = Enum.PartType.Ball,
+			Size = Vector3.new(1.4, 1.4, 1.4),
+			Position = top + Vector3.new(math.cos(i * 2.1) * 1, -1, math.sin(i * 2.1) * 1),
+			Color = Color3.fromRGB(110, 75, 40),
+			CanCollide = false,
+			Parent = model,
+		})
+	end
+	model.Parent = parent
+	return model
+end
+
+local function rock(parent: Instance, pos: Vector3, size: number)
+	for i = 1, 3 do
+		part({
+			Name = "Rock",
+			Size = Vector3.new(size * rng:NextNumber(0.7, 1.2), size * rng:NextNumber(0.5, 0.9), size * rng:NextNumber(0.7, 1.2)),
+			CFrame = CFrame.new(pos + Vector3.new(rng:NextNumber(-1, 1), size * 0.25, rng:NextNumber(-1, 1)) * (i - 1) * 0.5)
+				* CFrame.Angles(rng:NextNumber(-0.3, 0.3), rng:NextNumber(0, 6.28), rng:NextNumber(-0.3, 0.3)),
+			Color = ROCK,
+			Material = Enum.Material.Slate,
+			Parent = parent,
+		})
+	end
+end
+
+local function umbrella(parent: Instance, pos: Vector3, color: Color3)
+	part({ Name = "Pole", Size = Vector3.new(0.4, 9, 0.4), Position = pos + Vector3.new(0, 4.5, 0), Color = Color3.new(1, 1, 1), Parent = parent })
+	part({
+		Name = "Canopy",
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(0.6, 10, 10),
+		CFrame = CFrame.new(pos + Vector3.new(0, 9, 0)) * CFrame.Angles(0, 0, math.rad(90)),
+		Color = color,
+		Parent = parent,
+	})
+end
+
+-- Cave arch at the start of the path
+local function cave(parent: Instance, pos: Vector3, facing: Vector3)
+	local model = Instance.new("Model")
+	model.Name = "Cave"
+	local cf = CFrame.lookAt(pos, pos + facing)
+	local function block(offset: Vector3, size: Vector3)
+		return part({ Size = size, CFrame = cf * CFrame.new(offset), Color = ROCK, Material = Enum.Material.Slate, Parent = model })
+	end
+	block(Vector3.new(-8, 7, 2), Vector3.new(6, 14, 12))
+	block(Vector3.new(8, 7, 2), Vector3.new(6, 14, 12))
+	block(Vector3.new(0, 15, 2), Vector3.new(22, 5, 12))
+	local back = block(Vector3.new(0, 7, 7), Vector3.new(12, 14, 2))
+	back.Color = Color3.fromRGB(35, 35, 40)
+	for i = 1, 4 do
+		rock(model, (cf * CFrame.new(rng:NextNumber(-12, 12), 0, rng:NextNumber(4, 10))).Position, rng:NextNumber(4, 7))
+	end
+	model.Parent = parent
+end
+
+-- Little beach hut at the end of the path
+local function hut(parent: Instance, pos: Vector3)
+	local model = Instance.new("Model")
+	model.Name = "Hut"
+	part({ Size = Vector3.new(14, 8, 12), Position = pos + Vector3.new(0, 4, 0), Color = WOOD, Material = Enum.Material.WoodPlanks, Parent = model })
+	part({ Size = Vector3.new(4, 6, 0.4), Position = pos + Vector3.new(0, 3, -6.1), Color = Color3.fromRGB(60, 40, 25), Parent = model })
+	local roof = part({ Size = Vector3.new(17, 1, 9), Color = Color3.fromRGB(205, 175, 90), Material = Enum.Material.Fabric, Parent = model })
+	roof.CFrame = CFrame.new(pos + Vector3.new(0, 10, -3)) * CFrame.Angles(math.rad(-28), 0, 0)
+	local roof2 = roof:Clone()
+	roof2.CFrame = CFrame.new(pos + Vector3.new(0, 10, 3)) * CFrame.Angles(math.rad(28), 0, 0)
+	roof2.Parent = model
+	model.Parent = parent
+end
+
+local function buildPath(parent: Instance, origin: Vector3)
+	local folder = Instance.new("Folder")
+	folder.Name = "Path"
+	local pts = Config.PathPoints
+	local tile = Config.PathWidth
+	local idx = 0
+	for i = 1, #pts - 1 do
+		local a = Vector3.new(pts[i].X, 0, pts[i].Y)
+		local b = Vector3.new(pts[i + 1].X, 0, pts[i + 1].Y)
+		local dir = (b - a).Unit
+		local len = (b - a).Magnitude
+		local n = math.max(1, math.round(len / tile))
+		for k = 0, n do
+			idx += 1
+			local p = a + dir * (len * k / n)
+			part({
+				Name = "Tile",
+				Size = Vector3.new(tile, 0.3, tile),
+				Position = origin + p + Vector3.new(0, 0.15, 0),
+				Color = if idx % 2 == 0 then PATH_A else PATH_B,
+				Material = Enum.Material.Sand,
+				CanCollide = false,
+				Parent = folder,
+			})
+		end
+	end
+	-- glowing border strips along each segment
+	for i = 1, #pts - 1 do
+		local a = Vector3.new(pts[i].X, 0, pts[i].Y)
+		local b = Vector3.new(pts[i + 1].X, 0, pts[i + 1].Y)
+		local mid = (a + b) / 2
+		local len = (b - a).Magnitude + tile
+		local cf = CFrame.lookAt(origin + mid + Vector3.new(0, 0.2, 0), origin + b + Vector3.new(0, 0.2, 0))
+		for _, side in { -1, 1 } do
+			part({
+				Name = "Edge",
+				Size = Vector3.new(0.6, 0.35, len),
+				CFrame = cf * CFrame.new(side * (tile / 2 + 0.3), 0, 0),
+				Color = Color3.fromRGB(240, 190, 60),
+				Material = Enum.Material.SmoothPlastic,
+				CanCollide = false,
+				Parent = folder,
+			})
+		end
+	end
+	folder.Parent = parent
+end
+
+local function sign(parent: Instance, pos: Vector3, facing: Vector3)
+	local post = part({ Name = "SignPost", Size = Vector3.new(0.8, 8, 0.8), Position = pos + Vector3.new(0, 4, 0), Color = WOOD, Parent = parent })
+	local board = part({
+		Name = "Sign",
+		Size = Vector3.new(14, 4, 0.6),
+		CFrame = CFrame.lookAt(pos + Vector3.new(0, 9, 0), pos + Vector3.new(0, 9, 0) + facing),
+		Color = Color3.fromRGB(175, 120, 70),
+		Material = Enum.Material.WoodPlanks,
+		Parent = parent,
+	})
+	local gui = Instance.new("SurfaceGui")
+	gui.Face = Enum.NormalId.Front
+	gui.PixelsPerStud = 40
+	gui.Parent = board
+	local label = Instance.new("TextLabel")
+	label.Name = "Owner"
+	label.Size = UDim2.fromScale(1, 1)
+	label.BackgroundTransparency = 1
+	label.Font = Enum.Font.FredokaOne
+	label.TextScaled = true
+	label.TextColor3 = Color3.new(1, 1, 1)
+	label.Text = "Empty Base"
+	label.Parent = gui
+	local stroke = Instance.new("UIStroke")
+	stroke.Thickness = 3
+	stroke.Parent = label
+	return post, board
+end
+
+-- Builds one plot and returns its model. Origin = centre of the island top (Y = GroundY).
+local function buildPlot(index: number, origin: Vector3, hubSide: number)
+	local plot = Instance.new("Model")
+	plot.Name = "Plot" .. index
+	plot:SetAttribute("Index", index)
+	plot:SetAttribute("Origin", origin)
+	plot:SetAttribute("OwnerId", 0)
+	local size = Config.PlotSize
+	local ground = part({
+		Name = "Ground",
+		Size = Vector3.new(size, 6, size),
+		Position = origin - Vector3.new(0, 3, 0),
+		Color = SAND,
+		Material = Enum.Material.Sand,
+		Parent = plot,
+	})
+	-- soft rim
+	part({
+		Name = "Rim",
+		Size = Vector3.new(size + 8, 4, size + 8),
+		Position = origin - Vector3.new(0, 4.2, 0),
+		Color = SAND_DARK,
+		Material = Enum.Material.Sand,
+		Parent = plot,
+	})
+	plot.PrimaryPart = ground
+	buildPath(plot, origin)
+
+	local pts = Config.PathPoints
+	local first = Vector3.new(pts[1].X, 0, pts[1].Y)
+	local second = Vector3.new(pts[2].X, 0, pts[2].Y)
+	cave(plot, origin + first - (second - first).Unit * 4, (second - first).Unit)
+	local last = Vector3.new(pts[#pts].X, 0, pts[#pts].Y)
+	hut(plot, origin + last + Vector3.new(-6, 0, 0))
+
+	for _, corner in { Vector3.new(-62, 0, -62), Vector3.new(62, 0, -62), Vector3.new(-62, 0, 62), Vector3.new(62, 0, 62), Vector3.new(-62, 0, 0), Vector3.new(62, 0, 30) } do
+		palm(plot, origin + corner)
+	end
+	rock(plot, origin + Vector3.new(58, 0, -30), 5)
+	rock(plot, origin + Vector3.new(-62, 0, 30), 4)
+
+	local signPos = origin + Vector3.new(55, 0, hubSide * (size / 2 - 6))
+	sign(plot, signPos + Vector3.new(8, 0, 0), Vector3.new(0, 0, hubSide))
+
+	local turrets = Instance.new("Folder")
+	turrets.Name = "Turrets"
+	turrets.Parent = plot
+	local balloons = Instance.new("Folder")
+	balloons.Name = "Balloons"
+	balloons.Parent = plot
+
+	local spawnPoint = Instance.new("Attachment")
+	spawnPoint.Name = "SpawnPoint"
+	spawnPoint.WorldPosition = origin + Vector3.new(55, 4, hubSide * (size / 2 - 12))
+	spawnPoint.Parent = ground
+	return plot
+end
+
+local function leaderboardBoard(parent: Instance, cf: CFrame, title: string, key: string)
+	local model = Instance.new("Model")
+	model.Name = "Board_" .. key
+	part({ Size = Vector3.new(1, 18, 1), CFrame = cf * CFrame.new(-8, 9, 0.6), Color = WOOD, Parent = model })
+	part({ Size = Vector3.new(1, 18, 1), CFrame = cf * CFrame.new(8, 9, 0.6), Color = WOOD, Parent = model })
+	local board = part({
+		Name = "Screen",
+		Size = Vector3.new(16, 16, 0.6),
+		CFrame = cf * CFrame.new(0, 11, 0),
+		Color = Color3.fromRGB(60, 120, 200),
+		Parent = model,
+	})
+	local gui = Instance.new("SurfaceGui")
+	gui.Name = "Gui"
+	gui.Face = Enum.NormalId.Front
+	gui.PixelsPerStud = 30
+	gui.Parent = board
+	local layout = Instance.new("UIListLayout")
+	layout.Padding = UDim.new(0, 6)
+	layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.Parent = gui
+	local head = Instance.new("TextLabel")
+	head.Name = "Title"
+	head.LayoutOrder = 0
+	head.Size = UDim2.new(1, 0, 0, 60)
+	head.BackgroundColor3 = Color3.fromRGB(255, 190, 40)
+	head.Font = Enum.Font.FredokaOne
+	head.TextScaled = true
+	head.TextColor3 = Color3.new(1, 1, 1)
+	head.Text = title
+	head.Parent = gui
+	local stroke = Instance.new("UIStroke")
+	stroke.Thickness = 3
+	stroke.Parent = head
+	for i = 1, 10 do
+		local row = Instance.new("TextLabel")
+		row.Name = "Row" .. i
+		row.LayoutOrder = i
+		row.Size = UDim2.new(0.94, 0, 0, 34)
+		row.BackgroundColor3 = Color3.fromRGB(40, 90, 170)
+		row.BackgroundTransparency = 0.2
+		row.Font = Enum.Font.FredokaOne
+		row.TextScaled = true
+		row.TextXAlignment = Enum.TextXAlignment.Left
+		row.TextColor3 = Color3.new(1, 1, 1)
+		row.Text = string.format("  #%d  ---", i)
+		row.Parent = gui
+		local c = Instance.new("UICorner")
+		c.CornerRadius = UDim.new(0, 8)
+		c.Parent = row
+	end
+	model.Parent = parent
+	return board
+end
+
+function MapBuilder.Build()
+	-- lighting
+	Lighting.ClockTime = 14
+	Lighting.Brightness = 2.5
+	Lighting.OutdoorAmbient = Color3.fromRGB(150, 150, 160)
+	Lighting.EnvironmentDiffuseScale = 1
+	Lighting.EnvironmentSpecularScale = 1
+	if not Lighting:FindFirstChildOfClass("Atmosphere") then
+		local atm = Instance.new("Atmosphere")
+		atm.Density = 0.25
+		atm.Haze = 0.5
+		atm.Color = Color3.fromRGB(200, 225, 255)
+		atm.Parent = Lighting
+	end
+	if not Lighting:FindFirstChildOfClass("Sky") then
+		Instance.new("Sky").Parent = Lighting
+	end
+
+	local old = workspace:FindFirstChild("Baseplate")
+	if old then
+		old:Destroy()
+	end
+
+	-- water
+	local terrain = workspace.Terrain
+	terrain.WaterColor = Color3.fromRGB(40, 170, 220)
+	terrain.WaterTransparency = 0.4
+	terrain.WaterWaveSize = 0.1
+	terrain:FillBlock(CFrame.new(0, -6, 0), Vector3.new(1400, 12, 1400), Enum.Material.Water)
+	terrain:FillBlock(CFrame.new(0, -16, 0), Vector3.new(1400, 8, 1400), Enum.Material.Sand)
+
+	local map = Instance.new("Folder")
+	map.Name = "Map"
+	map.Parent = workspace
+
+	-- hub island
+	local hub = Instance.new("Model")
+	hub.Name = "Hub"
+	part({ Name = "HubGround", Size = Vector3.new(520, 6, 180), Position = Vector3.new(0, Config.GroundY - 3, 0), Color = SAND, Material = Enum.Material.Sand, Parent = hub })
+	part({ Name = "Grass", Size = Vector3.new(120, 0.4, 70), Position = Vector3.new(0, Config.GroundY + 0.2, 0), Color = GRASS, Material = Enum.Material.Grass, Parent = hub })
+	local spawn = Instance.new("SpawnLocation")
+	spawn.Anchored = true
+	spawn.Size = Vector3.new(14, 1, 14)
+	spawn.Position = Vector3.new(0, Config.GroundY + 0.5, 0)
+	spawn.Color = Color3.fromRGB(255, 200, 60)
+	spawn.Material = Enum.Material.Neon
+	spawn.Neutral = true
+	spawn.Duration = 0
+	spawn.Parent = hub
+	for i = 1, 16 do
+		palm(hub, Vector3.new(rng:NextNumber(-250, 250), Config.GroundY, (if i % 2 == 0 then 1 else -1) * rng:NextNumber(60, 85)))
+	end
+	for i = 1, 5 do
+		umbrella(hub, Vector3.new(-200 + i * 70, Config.GroundY, rng:NextNumber(-40, 40)), if i % 2 == 0 then Color3.fromRGB(80, 200, 230) else Color3.fromRGB(240, 90, 90))
+	end
+	rock(hub, Vector3.new(-120, Config.GroundY, 30), 8)
+	rock(hub, Vector3.new(140, Config.GroundY, -35), 9)
+	hub.Parent = map
+
+	-- leaderboards facing the spawn
+	local boards = {}
+	local lbFolder = Instance.new("Folder")
+	lbFolder.Name = "Leaderboards"
+	lbFolder.Parent = map
+	for i, info in { { "Best Wave", "BestWave" }, { "Top Rolls", "TopRolls" }, { "Top Coins", "TopCoins" } } do
+		local x = (i - 2) * 20
+		local cf = CFrame.lookAt(Vector3.new(x, Config.GroundY, 45), Vector3.new(x, Config.GroundY, 0))
+		boards[info[2]] = leaderboardBoard(lbFolder, cf, info[1], info[2])
+	end
+
+	-- plots in two rows of three
+	local plots = {}
+	local plotsFolder = Instance.new("Folder")
+	plotsFolder.Name = "Plots"
+	plotsFolder.Parent = workspace
+	local half = Config.PlotSize / 2
+	for i = 1, Config.PlotCount do
+		local row = if i <= 3 then -1 else 1
+		local col = ((i - 1) % 3) - 1
+		local origin = Vector3.new(col * 170, Config.GroundY, row * (90 + 25 + half))
+		local plot = buildPlot(i, origin, -row)
+		plot.Parent = plotsFolder
+		plots[i] = plot
+		-- bridge from hub to plot
+		local zHub = row * 90
+		local zPlot = origin.Z - row * half
+		local x = origin.X + 55
+		local len = math.abs(zPlot - zHub) + 4
+		part({
+			Name = "Bridge",
+			Size = Vector3.new(10, 1, len),
+			Position = Vector3.new(x, Config.GroundY - 0.4, (zHub + zPlot) / 2),
+			Color = WOOD,
+			Material = Enum.Material.WoodPlanks,
+			Parent = map,
+		})
+		for _, side in { -1, 1 } do
+			part({
+				Name = "Rail",
+				Size = Vector3.new(0.6, 2.5, len),
+				Position = Vector3.new(x + side * 5, Config.GroundY + 1, (zHub + zPlot) / 2),
+				Color = Color3.fromRGB(120, 80, 45),
+				Material = Enum.Material.Wood,
+				Parent = map,
+			})
+		end
+	end
+	return plots, boards
+end
+
+return MapBuilder
+]]></ProtectedString></Properties></Item>
+<Item class="ModuleScript" referent="RBX00000008"><Properties><string name="Name">PlotService</string><ProtectedString name="Source"><![CDATA[-- Plot ownership and path geometry for each player's base.
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage.Shared.Config)
+
+local PlotService = {}
+
+export type Plot = {
+	index: number,
+	model: Model,
+	origin: Vector3,
+	owner: Player?,
+	path: { Vector3 },
+	cumulative: { number },
+	length: number,
+	balloons: { any },
+	turrets: { any },
+	running: boolean,
+	wave: number,
+	lives: number,
+	runId: number,
+}
+
+local plots: { Plot } = {}
+local byPlayer: { [Player]: Plot } = {}
+
+function PlotService.Init(models: { Model })
+	for i, model in models do
+		local origin = model:GetAttribute("Origin") :: Vector3
+		local path = {}
+		local cumulative = { 0 }
+		for k, p in Config.PathPoints do
+			path[k] = origin + Vector3.new(p.X, 0, p.Y)
+			if k > 1 then
+				cumulative[k] = cumulative[k - 1] + (path[k] - path[k - 1]).Magnitude
+			end
+		end
+		plots[i] = {
+			index = i,
+			model = model,
+			origin = origin,
+			owner = nil,
+			path = path,
+			cumulative = cumulative,
+			length = cumulative[#cumulative],
+			balloons = {},
+			turrets = {},
+			running = false,
+			wave = 0,
+			lives = Config.StartingLives,
+			runId = 0,
+		}
+	end
+end
+
+local function setSign(plot: Plot, text: string)
+	local board = plot.model:FindFirstChild("Sign", true)
+	local label = board and board:FindFirstChild("Owner", true)
+	if label then
+		(label :: TextLabel).Text = text
+	end
+end
+
+function PlotService.Assign(player: Player): Plot?
+	for _, plot in plots do
+		if plot.owner == nil then
+			plot.owner = player
+			plot.model:SetAttribute("OwnerId", player.UserId)
+			player:SetAttribute("PlotIndex", plot.index)
+			setSign(plot, player.DisplayName .. "'s Base")
+			byPlayer[player] = plot
+			return plot
+		end
+	end
+	return nil
+end
+
+function PlotService.Release(player: Player)
+	local plot = byPlayer[player]
+	if not plot then
+		return
+	end
+	byPlayer[player] = nil
+	plot.owner = nil
+	plot.running = false
+	plot.runId += 1
+	plot.wave = 0
+	plot.lives = Config.StartingLives
+	plot.model:SetAttribute("OwnerId", 0)
+	setSign(plot, "Empty Base")
+end
+
+function PlotService.Get(player: Player): Plot?
+	return byPlayer[player]
+end
+
+function PlotService.All(): { Plot }
+	return plots
+end
+
+-- Position along the path at distance d (clamped).
+function PlotService.PointAt(plot: Plot, d: number): (Vector3, Vector3)
+	local cum = plot.cumulative
+	local path = plot.path
+	for k = 2, #path do
+		if d <= cum[k] then
+			local a, b = path[k - 1], path[k]
+			local t = (d - cum[k - 1]) / (cum[k] - cum[k - 1])
+			return a:Lerp(b, t), (b - a).Unit
+		end
+	end
+	return path[#path], (path[#path] - path[#path - 1]).Unit
+end
+
+function PlotService.SpawnCFrame(plot: Plot): CFrame
+	local att = plot.model:FindFirstChild("SpawnPoint", true) :: Attachment?
+	local pos = if att then att.WorldPosition else plot.origin + Vector3.new(0, 5, 0)
+	return CFrame.lookAt(pos, Vector3.new(plot.origin.X, pos.Y, plot.origin.Z))
+end
+
+function PlotService.TeleportHome(player: Player)
+	local plot = byPlayer[player]
+	local char = player.Character
+	if plot and char then
+		char:PivotTo(PlotService.SpawnCFrame(plot))
+	end
+end
+
+return PlotService
+]]></ProtectedString></Properties></Item>
+<Item class="ModuleScript" referent="RBX00000009"><Properties><string name="Name">RollService</string><ProtectedString name="Source"><![CDATA[-- RNG rolling for turrets and the upgrade (skill tree) shop.
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage.Shared.Config)
+local Util = require(ReplicatedStorage.Shared.Util)
+local DataService = require(script.Parent.DataService)
+
+local RollService = {}
+
+local remotes: any
+local lastRoll: { [Player]: number } = {}
+local rng = Random.new()
+
+function RollService.Roll(player: Player)
+	local data = DataService.Get(player)
+	if not data then
+		return nil
+	end
+	local stats = DataService.Stats(player)
+	local now = os.clock()
+	if lastRoll[player] and now - lastRoll[player] < stats.rollCooldown * 0.9 then
+		return nil
+	end
+	lastRoll[player] = now
+	local def = Util.RollFrom(Config.Turrets, stats.luck, rng)
+	data.inventory[def.id] = (data.inventory[def.id] or 0) + 1
+	local isNew = not data.discovered[def.id]
+	data.discovered[def.id] = true
+	data.rolls += 1
+	DataService.MarkDirty(player)
+	if def.chance >= Config.RareAnnounceChance then
+		remotes.Notify:FireAllClients(
+			string.format("🎲 %s rolled %s (%s)!", player.DisplayName, def.name, Util.ChanceText(def.chance)),
+			Config.RarityColors[def.rarity]
+		)
+	end
+	return { id = def.id, isNew = isNew }
+end
+
+function RollService.BuyUpgrade(player: Player, id: string)
+	local data = DataService.Get(player)
+	local def = typeof(id) == "string" and Config.Get(id)
+	if not data or not def or def.effect == nil then
+		return false, "Unknown upgrade"
+	end
+	if data.upgrades[id] then
+		return false, "Already owned"
+	end
+	if def.requires and not data.upgrades[def.requires] then
+		return false, "Requires " .. Config.Get(def.requires).name
+	end
+	if data.coins < def.cost then
+		return false, "Not enough coins"
+	end
+	data.coins -= def.cost
+	data.upgrades[id] = true
+	DataService.Sync(player)
+	return true, nil
+end
+
+function RollService.Init(remoteFolder: Folder)
+	remotes = remoteFolder
+end
+
+function RollService.Forget(player: Player)
+	lastRoll[player] = nil
+end
+
+return RollService
+]]></ProtectedString></Properties></Item>
+<Item class="ModuleScript" referent="RBX0000000A"><Properties><string name="Name">TurretService</string><ProtectedString name="Source"><![CDATA[-- Turret placement on plots, turret models and auto-targeting.
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local Config = require(ReplicatedStorage.Shared.Config)
+local Util = require(ReplicatedStorage.Shared.Util)
+local DataService = require(script.Parent.DataService)
+local PlotService = require(script.Parent.PlotService)
+local WaveService = require(script.Parent.WaveService)
+
+local TurretService = {}
+
+local remotes: any
+
+local function weld(a: BasePart, b: BasePart)
+	local w = Instance.new("WeldConstraint")
+	w.Part0 = a
+	w.Part1 = b
+	w.Parent = b
+end
+
+local function newPart(props)
+	local p = Instance.new("Part")
+	p.TopSurface = Enum.SurfaceType.Smooth
+	p.BottomSurface = Enum.SurfaceType.Smooth
+	p.Material = Enum.Material.SmoothPlastic
+	for k, v in props do
+		(p :: any)[k] = v
+	end
+	return p
+end
+
+-- Builds a turret model. Head is anchored and rotated to aim; barrels are welded to it.
+function TurretService.BuildModel(def, cf: CFrame)
+	local model = Instance.new("Model")
+	model.Name = def.id
+	local dark = Color3.fromRGB(55, 60, 75)
+	local base = newPart({
+		Name = "Base",
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(1.2, 5.5, 5.5),
+		CFrame = cf * CFrame.new(0, 0.6, 0) * CFrame.Angles(0, 0, math.rad(90)),
+		Color = dark,
+		Anchored = true,
+		Parent = model,
+	})
+	newPart({
+		Name = "Ring",
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(0.4, 5.9, 5.9),
+		CFrame = cf * CFrame.new(0, 0.35, 0) * CFrame.Angles(0, 0, math.rad(90)),
+		Color = Config.RarityColors[def.rarity],
+		Material = Enum.Material.Neon,
+		Anchored = true,
+		CanCollide = false,
+		Parent = model,
+	})
+	newPart({
+		Name = "Neck",
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(1.6, 2.2, 2.2),
+		CFrame = cf * CFrame.new(0, 2, 0) * CFrame.Angles(0, 0, math.rad(90)),
+		Color = def.color:Lerp(Color3.new(0, 0, 0), 0.3),
+		Anchored = true,
+		Parent = model,
+	})
+	local head = newPart({
+		Name = "Head",
+		Size = Vector3.new(3, 2.2, 3.2),
+		CFrame = cf * CFrame.new(0, 3.6, 0),
+		Color = def.color,
+		Material = if def.neon then Enum.Material.Glass else Enum.Material.SmoothPlastic,
+		Anchored = true,
+		Parent = model,
+	})
+	local barrelLen = if def.long then 5.5 else 3.2
+	local n = def.barrels or 1
+	for i = 1, n do
+		local x = (i - (n + 1) / 2) * 0.9
+		local barrel = newPart({
+			Name = "Barrel",
+			Shape = Enum.PartType.Cylinder,
+			Size = Vector3.new(barrelLen, 0.7, 0.7),
+			CFrame = head.CFrame * CFrame.new(x, 0.1, -1.6 - barrelLen / 2) * CFrame.Angles(0, math.rad(90), 0),
+			Color = if def.neon then def.color else Color3.fromRGB(40, 40, 50),
+			Material = if def.neon then Enum.Material.Neon else Enum.Material.Metal,
+			Anchored = false,
+			CanCollide = false,
+			Massless = true,
+			Parent = model,
+		})
+		weld(head, barrel)
+		local tip = Instance.new("Attachment")
+		tip.Name = "Tip"
+		tip.Position = Vector3.new(barrelLen / 2, 0, 0)
+		tip.Parent = barrel
+	end
+	if Config.Get(def.id).chance >= 400 then
+		local light = Instance.new("PointLight")
+		light.Color = Config.RarityColors[def.rarity]
+		light.Range = 14
+		light.Brightness = 3
+		light.Parent = head
+		local fx = Instance.new("ParticleEmitter")
+		fx.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+		fx.Color = ColorSequence.new(Config.RarityColors[def.rarity])
+		fx.Rate = 6
+		fx.Lifetime = NumberRange.new(0.8, 1.2)
+		fx.Speed = NumberRange.new(1, 2)
+		fx.SpreadAngle = Vector2.new(180, 180)
+		fx.Size = NumberSequence.new(0.5)
+		fx.Parent = head
+	end
+	-- name tag
+	local bb = Instance.new("BillboardGui")
+	bb.Size = UDim2.fromOffset(140, 26)
+	bb.StudsOffset = Vector3.new(0, 3, 0)
+	bb.MaxDistance = 60
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.fromScale(1, 1)
+	label.BackgroundTransparency = 1
+	label.Font = Enum.Font.FredokaOne
+	label.TextScaled = true
+	label.Text = def.name
+	label.TextColor3 = Config.RarityColors[def.rarity]
+	label.Parent = bb
+	local stroke = Instance.new("UIStroke")
+	stroke.Thickness = 2
+	stroke.Parent = label
+	bb.Parent = head
+
+	model.PrimaryPart = base
+	return model, head
+end
+
+local function placedCount(plot, id: string): number
+	local n = 0
+	for _, t in plot.turrets do
+		if t.def.id == id then
+			n += 1
+		end
+	end
+	return n
+end
+
+function TurretService.Place(player: Player, id: string, pos: Vector3, yaw: number)
+	if typeof(id) ~= "string" or typeof(pos) ~= "Vector3" or typeof(yaw) ~= "number" then
+		return false, "Bad request"
+	end
+	local plot = PlotService.Get(player)
+	local data = DataService.Get(player)
+	local def = Config.Get(id)
+	if not plot or not data or not def or def.fireRate == nil then
+		return false, "Unknown turret"
+	end
+	local stats = DataService.Stats(player)
+	if #plot.turrets >= stats.maxTurrets then
+		return false, string.format("Turret limit reached (%d). Buy Slots upgrades!", stats.maxTurrets)
+	end
+	if placedCount(plot, id) >= (data.inventory[id] or 0) then
+		return false, "You don't have any more " .. def.name .. "s"
+	end
+	local others = {}
+	for _, t in plot.turrets do
+		table.insert(others, t.position)
+	end
+	local ground = Vector3.new(pos.X, Config.GroundY, pos.Z)
+	local ok, reason = Util.CanPlace(plot.origin, ground, others)
+	if not ok then
+		return false, reason
+	end
+	local cf = CFrame.new(ground) * CFrame.Angles(0, math.rad(yaw), 0)
+	local model, head = TurretService.BuildModel(def, cf)
+	model:SetAttribute("TurretId", id)
+	model.Parent = plot.model.Turrets
+	table.insert(plot.turrets, {
+		def = def,
+		model = model,
+		head = head,
+		headOffset = head.CFrame.Position,
+		position = ground,
+		cooldown = 0,
+	})
+	return true, nil
+end
+
+function TurretService.Remove(player: Player, model: Instance)
+	local plot = PlotService.Get(player)
+	if not plot then
+		return
+	end
+	for i, t in plot.turrets do
+		if t.model == model then
+			t.model:Destroy()
+			table.remove(plot.turrets, i)
+			return
+		end
+	end
+end
+
+function TurretService.Clear(plot)
+	for _, t in plot.turrets do
+		t.model:Destroy()
+	end
+	table.clear(plot.turrets)
+end
+
+-- Pick the balloon furthest along the path within range.
+local function pickTarget(plot, pos: Vector3, range: number)
+	local best, bestDist = nil, -1
+	for _, b in plot.balloons do
+		if b.alive and b.dist > bestDist then
+			local bp = b.model.PrimaryPart.Position
+			local flat = Vector2.new(bp.X - pos.X, bp.Z - pos.Z)
+			if flat.Magnitude <= range then
+				best, bestDist = b, b.dist
+			end
+		end
+	end
+	return best
+end
+
+local function step(dt: number)
+	for _, plot in PlotService.All() do
+		if #plot.turrets > 0 and #plot.balloons > 0 and plot.owner then
+			local stats = DataService.Stats(plot.owner)
+			for _, t in plot.turrets do
+				t.cooldown -= dt
+				if t.cooldown <= 0 then
+					local def = t.def
+					local target = pickTarget(plot, t.position, def.range)
+					if target then
+						t.cooldown = 1 / def.fireRate
+						local targetPos = target.model.PrimaryPart.Position
+						local headPos = t.headOffset
+						t.head.CFrame = CFrame.lookAt(headPos, Vector3.new(targetPos.X, headPos.Y, targetPos.Z))
+						local damage = def.damage * stats.damageMult
+						if def.splash then
+							for _, b in WaveService.BalloonsNear(plot, targetPos, def.splash) do
+								WaveService.Damage(b, damage, nil)
+							end
+						else
+							WaveService.Damage(target, damage, nil)
+						end
+						remotes.Shot:FireAllClients(t.head.Position + t.head.CFrame.LookVector * 3, targetPos, Config.RarityColors[def.rarity], def.splash ~= nil)
+					else
+						t.cooldown = 0.1
+					end
+				end
+			end
+		end
+	end
+end
+
+function TurretService.Init(remoteFolder: Folder)
+	remotes = remoteFolder
+	RunService.Heartbeat:Connect(step)
+end
+
+return TurretService
+]]></ProtectedString></Properties></Item>
+<Item class="ModuleScript" referent="RBX0000000B"><Properties><string name="Name">WaveService</string><ProtectedString name="Source"><![CDATA[-- Balloon waves: spawning, movement along the path, damage, popping and rewards.
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local Config = require(ReplicatedStorage.Shared.Config)
+local Util = require(ReplicatedStorage.Shared.Util)
+local DataService = require(script.Parent.DataService)
+local PlotService = require(script.Parent.PlotService)
+
+local WaveService = {}
+
+local remotes: any
+local rng = Random.new()
+
+local function notify(player: Player?, text: string, color: Color3?)
+	if player then
+		remotes.Notify:FireClient(player, text, color)
+	else
+		remotes.Notify:FireAllClients(text, color)
+	end
+end
+
+local function sendState(plot)
+	if plot.owner then
+		remotes.WaveState:FireClient(plot.owner, {
+			running = plot.running,
+			wave = plot.wave,
+			lives = plot.lives,
+			maxLives = Config.StartingLives,
+			alive = #plot.balloons,
+		})
+	end
+end
+WaveService.SendState = sendState
+
+---------------------------------------------------------------------- balloon model
+local function makeBalloon(def, hp: number)
+	local scale = def.size or 1
+	local model = Instance.new("Model")
+	model.Name = def.id .. "Balloon"
+
+	local ball = Instance.new("Part")
+	ball.Name = "Ball"
+	ball.Shape = Enum.PartType.Ball
+	ball.Size = Vector3.new(4.2, 4.2, 4.2) * scale
+	ball.Color = def.color
+	ball.Material = if def.golden then Enum.Material.Foil elseif def.rainbow then Enum.Material.Neon else Enum.Material.SmoothPlastic
+	ball.Reflectance = if def.golden then 0.3 else 0.08
+	ball.Anchored = true
+	ball.CanCollide = false
+	ball.CanQuery = true
+	ball.CastShadow = true
+	ball.Parent = model
+
+	local knot = Instance.new("Part")
+	knot.Name = "Knot"
+	knot.Size = Vector3.new(0.7, 0.6, 0.7) * scale
+	knot.Color = def.color
+	knot.Anchored = false
+	knot.Massless = true
+	knot.CanCollide = false
+	knot.CFrame = ball.CFrame * CFrame.new(0, -ball.Size.Y / 2, 0)
+	knot.Parent = model
+
+	local str = Instance.new("Part")
+	str.Name = "String"
+	str.Size = Vector3.new(0.08, 3.5, 0.08)
+	str.Color = Color3.new(1, 1, 1)
+	str.Anchored = false
+	str.Massless = true
+	str.CanCollide = false
+	str.CanQuery = false
+	str.CFrame = ball.CFrame * CFrame.new(0, -ball.Size.Y / 2 - 1.75, 0)
+	str.Parent = model
+
+	for _, p in { knot, str } do
+		local w = Instance.new("WeldConstraint")
+		w.Part0 = ball
+		w.Part1 = p
+		w.Parent = p
+	end
+
+	if def.mystery then
+		local gui = Instance.new("SurfaceGui")
+		gui.Face = Enum.NormalId.Front
+		local q = Instance.new("TextLabel")
+		q.Size = UDim2.fromScale(1, 1)
+		q.BackgroundTransparency = 1
+		q.Text = "?"
+		q.TextScaled = true
+		q.Font = Enum.Font.FredokaOne
+		q.TextColor3 = Color3.fromRGB(180, 180, 190)
+		q.Parent = gui
+		gui.Parent = ball
+	end
+	if def.rainbow or def.golden or def.mystery then
+		local sparkle = Instance.new("ParticleEmitter")
+		sparkle.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+		sparkle.Rate = 12
+		sparkle.Lifetime = NumberRange.new(0.6, 1)
+		sparkle.Speed = NumberRange.new(2, 4)
+		sparkle.SpreadAngle = Vector2.new(180, 180)
+		sparkle.Size = NumberSequence.new(0.6)
+		sparkle.Parent = ball
+		local light = Instance.new("PointLight")
+		light.Color = def.color
+		light.Range = 12
+		light.Brightness = 2
+		light.Parent = ball
+	end
+
+	-- name + HP bar
+	local bb = Instance.new("BillboardGui")
+	bb.Name = "Info"
+	bb.Size = UDim2.fromOffset(170, 52)
+	bb.StudsOffset = Vector3.new(0, ball.Size.Y / 2 + 2, 0)
+	bb.AlwaysOnTop = true
+	bb.MaxDistance = 140
+	local name = Instance.new("TextLabel")
+	name.Name = "Name"
+	name.Size = UDim2.new(1, 0, 0.45, 0)
+	name.BackgroundTransparency = 1
+	name.Font = Enum.Font.FredokaOne
+	name.TextScaled = true
+	name.TextColor3 = Color3.new(1, 1, 1)
+	name.Text = def.name
+	name.Parent = bb
+	local s1 = Instance.new("UIStroke")
+	s1.Thickness = 2
+	s1.Parent = name
+	local bar = Instance.new("Frame")
+	bar.Name = "Bar"
+	bar.Position = UDim2.fromScale(0.05, 0.5)
+	bar.Size = UDim2.fromScale(0.9, 0.45)
+	bar.BackgroundColor3 = Color3.fromRGB(30, 60, 30)
+	bar.Parent = bb
+	Instance.new("UICorner", bar).CornerRadius = UDim.new(1, 0)
+	local s2 = Instance.new("UIStroke")
+	s2.Thickness = 2
+	s2.Color = Color3.fromRGB(20, 40, 20)
+	s2.Parent = bar
+	local fill = Instance.new("Frame")
+	fill.Name = "Fill"
+	fill.Size = UDim2.fromScale(1, 1)
+	fill.BackgroundColor3 = Color3.fromRGB(110, 230, 70)
+	fill.Parent = bar
+	Instance.new("UICorner", fill).CornerRadius = UDim.new(1, 0)
+	local hpText = Instance.new("TextLabel")
+	hpText.Name = "Hp"
+	hpText.Size = UDim2.fromScale(1, 1)
+	hpText.BackgroundTransparency = 1
+	hpText.Font = Enum.Font.FredokaOne
+	hpText.TextScaled = true
+	hpText.TextColor3 = Color3.new(1, 1, 1)
+	hpText.Text = Util.Abbrev(hp) .. " / " .. Util.Abbrev(hp)
+	hpText.ZIndex = 2
+	hpText.Parent = bar
+	local s3 = Instance.new("UIStroke")
+	s3.Thickness = 1.5
+	s3.Parent = hpText
+	bb.Parent = ball
+
+	model.PrimaryPart = ball
+	return model
+end
+
+local function updateBar(b)
+	local bb = b.model.PrimaryPart and b.model.PrimaryPart:FindFirstChild("Info")
+	if bb then
+		local bar = bb:FindFirstChild("Bar")
+		bar.Fill.Size = UDim2.fromScale(math.max(0, b.hp / b.maxHp), 1)
+		bar.Hp.Text = Util.Abbrev(math.max(0, math.ceil(b.hp))) .. " / " .. Util.Abbrev(b.maxHp)
+	end
+end
+
+---------------------------------------------------------------------- spawning
+local function spawnBalloon(plot)
+	local owner = plot.owner
+	if not owner then
+		return
+	end
+	local stats = DataService.Stats(owner)
+	local luck = stats.luck * (1 + plot.wave * 0.05)
+	local def = Util.RollFrom(Config.Balloons, luck, rng)
+	local hp = math.floor(def.hp * Config.HpGrowth ^ (plot.wave - 1))
+	local model = makeBalloon(def, hp)
+	local b = {
+		def = def,
+		hp = hp,
+		maxHp = hp,
+		reward = def.reward * (1 + Config.RewardGrowth * (plot.wave - 1)),
+		dist = 0,
+		speed = def.speed,
+		model = model,
+		plot = plot,
+		alive = true,
+		phase = rng:NextNumber(0, 6.28),
+	}
+	local pos = PlotService.PointAt(plot, 0)
+	model:PivotTo(CFrame.new(pos + Vector3.new(0, 5, 0)))
+	model.Parent = plot.model.Balloons
+	table.insert(plot.balloons, b)
+	if def.chance >= 500 then
+		notify(nil, string.format("🎈 %s found a %s! (%s)", owner.DisplayName, def.name, Util.ChanceText(def.chance)), def.color)
+	end
+	return b
+end
+
+local function removeBalloon(b)
+	b.alive = false
+	local list = b.plot.balloons
+	local i = table.find(list, b)
+	if i then
+		table.remove(list, i)
+	end
+	b.model:Destroy()
+end
+
+function WaveService.Damage(b, amount: number, attacker: Player?)
+	if not b.alive then
+		return
+	end
+	b.hp -= amount
+	if b.hp <= 0 then
+		local plot = b.plot
+		local owner = plot.owner
+		local pos = b.model.PrimaryPart.Position
+		removeBalloon(b)
+		if owner then
+			local stats = DataService.Stats(owner)
+			local coins = math.max(1, math.floor(b.reward * stats.coinMult))
+			DataService.AddCoins(owner, coins)
+			local data = DataService.Get(owner)
+			if data then
+				data.popped += 1
+			end
+			remotes.Popped:FireClient(owner, pos, b.def.color, coins, b.def.id)
+			if attacker and attacker ~= owner then
+				remotes.Popped:FireClient(attacker, pos, b.def.color, 0, b.def.id)
+			end
+		end
+	else
+		updateBar(b)
+	end
+end
+
+function WaveService.BalloonsNear(plot, pos: Vector3, radius: number)
+	local out = {}
+	for _, b in plot.balloons do
+		if b.alive and (b.model.PrimaryPart.Position - pos).Magnitude <= radius then
+			table.insert(out, b)
+		end
+	end
+	return out
+end
+
+local function clearBalloons(plot)
+	for i = #plot.balloons, 1, -1 do
+		removeBalloon(plot.balloons[i])
+	end
+end
+
+local function gameOver(plot)
+	local owner = plot.owner
+	plot.running = false
+	plot.runId += 1
+	clearBalloons(plot)
+	if owner then
+		notify(owner, string.format("💥 Your base fell on wave %d! Press Start to try again.", plot.wave), Color3.fromRGB(255, 90, 90))
+		remotes.PlaySound:FireClient(owner, "Lose")
+	end
+	plot.wave = 0
+	plot.lives = Config.StartingLives
+	sendState(plot)
+end
+
+local function runWaves(plot, runId: number)
+	while plot.running and plot.runId == runId and plot.owner do
+		local owner = plot.owner
+		local stats = DataService.Stats(owner)
+		plot.wave += 1
+		sendState(plot)
+		local count = math.min(Config.WaveBaseCount + plot.wave * Config.WaveCountPerWave, Config.WaveMaxCount)
+		for _ = 1, count do
+			if not (plot.running and plot.runId == runId) then
+				return
+			end
+			spawnBalloon(plot)
+			sendState(plot)
+			task.wait(Config.SpawnInterval / stats.waveSpeed)
+		end
+		while plot.running and plot.runId == runId and #plot.balloons > 0 do
+			task.wait(0.25)
+		end
+		if not (plot.running and plot.runId == runId and plot.owner) then
+			return
+		end
+		-- wave cleared
+		local data = DataService.Get(owner)
+		if data then
+			local bonus = math.floor(Config.WaveClearBonus * plot.wave * stats.bonusMult * stats.coinMult)
+			DataService.AddCoins(owner, bonus)
+			if plot.wave > data.bestWave then
+				data.bestWave = plot.wave
+			end
+			notify(owner, string.format("Wave %d cleared! +$%s", plot.wave, Util.Abbrev(bonus)), Color3.fromRGB(120, 255, 120))
+			remotes.PlaySound:FireClient(owner, "WaveClear")
+		end
+		task.wait(Config.WaveBreak / stats.waveSpeed)
+	end
+end
+
+function WaveService.Start(player: Player)
+	local plot = PlotService.Get(player)
+	if not plot or plot.running then
+		return
+	end
+	plot.running = true
+	plot.runId += 1
+	plot.wave = 0
+	plot.lives = Config.StartingLives
+	task.spawn(runWaves, plot, plot.runId)
+end
+
+function WaveService.Stop(plot)
+	plot.running = false
+	plot.runId += 1
+	clearBalloons(plot)
+	plot.wave = 0
+	plot.lives = Config.StartingLives
+	sendState(plot)
+end
+
+---------------------------------------------------------------------- movement
+local t = 0
+local rainbowHue = 0
+local function step(dt: number)
+	t += dt
+	rainbowHue = (rainbowHue + dt * 0.4) % 1
+	for _, plot in PlotService.All() do
+		local balloons = plot.balloons
+		for i = #balloons, 1, -1 do
+			local b = balloons[i]
+			if b.alive then
+				b.dist += b.speed * dt
+				if b.dist >= plot.length then
+					removeBalloon(b)
+					plot.lives -= b.def.lives or 1
+					sendState(plot)
+					if plot.lives <= 0 then
+						gameOver(plot)
+						break
+					end
+				else
+					local pos = PlotService.PointAt(plot, b.dist)
+					local bob = math.sin(t * 3 + b.phase) * 0.5
+					b.model.PrimaryPart.CFrame = CFrame.new(pos + Vector3.new(0, 5 + bob, 0)) * CFrame.Angles(0, t + b.phase, 0)
+					if b.def.rainbow then
+						b.model.PrimaryPart.Color = Color3.fromHSV(rainbowHue, 0.85, 1)
+					end
+				end
+			end
+		end
+	end
+end
+
+function WaveService.Init(remoteFolder: Folder)
+	remotes = remoteFolder
+	RunService.Heartbeat:Connect(step)
+end
+
+return WaveService
+]]></ProtectedString></Properties></Item>
+</Item>
+</Item>
+<Item class="StarterPlayer" referent="RBX00000016"><Properties><string name="Name">StarterPlayer</string></Properties><Item class="StarterPlayerScripts" referent="RBX00000012"><Properties><string name="Name">StarterPlayerScripts</string></Properties><Item class="Folder" referent="RBX00000011"><Properties><string name="Name">Client</string></Properties><Item class="ModuleScript" referent="RBX0000000D"><Properties><string name="Name">Effects</string><ProtectedString name="Source"><![CDATA[-- Client-side visuals and sounds: pops, tracers, floating coin text.
+local Debris = game:GetService("Debris")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local SoundService = game:GetService("SoundService")
+local TweenService = game:GetService("TweenService")
+
+local Config = require(ReplicatedStorage.Shared.Config)
+local Util = require(ReplicatedStorage.Shared.Util)
+
+local Effects = {}
+
+local fxFolder = Instance.new("Folder")
+fxFolder.Name = "ClientFX"
+fxFolder.Parent = workspace
+
+local rng = Random.new()
+
+local function anchor(pos: Vector3): Part
+	local p = Instance.new("Part")
+	p.Anchored = true
+	p.CanCollide = false
+	p.CanQuery = false
+	p.CanTouch = false
+	p.Transparency = 1
+	p.Size = Vector3.new(0.2, 0.2, 0.2)
+	p.Position = pos
+	p.Parent = fxFolder
+	return p
+end
+
+function Effects.Play(name: string, pos: Vector3?, speed: number?)
+	local id = Config.Sounds[name]
+	if not id or id == "" then
+		return
+	end
+	local s = Instance.new("Sound")
+	s.SoundId = id
+	s.Volume = 0.5
+	s.PlaybackSpeed = speed or 1
+	if pos then
+		local a = anchor(pos)
+		s.RollOffMaxDistance = 150
+		s.Parent = a
+		s:Play()
+		Debris:AddItem(a, 3)
+	else
+		s.Parent = SoundService
+		s:Play()
+		Debris:AddItem(s, 3)
+	end
+end
+
+function Effects.FloatText(pos: Vector3, text: string, color: Color3)
+	local a = anchor(pos)
+	local bb = Instance.new("BillboardGui")
+	bb.Size = UDim2.fromOffset(120, 40)
+	bb.AlwaysOnTop = true
+	bb.StudsOffset = Vector3.new(0, 2, 0)
+	bb.Parent = a
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.fromScale(1, 1)
+	label.BackgroundTransparency = 1
+	label.Font = Enum.Font.FredokaOne
+	label.TextScaled = true
+	label.Text = text
+	label.TextColor3 = color
+	label.Parent = bb
+	local stroke = Instance.new("UIStroke")
+	stroke.Thickness = 2
+	stroke.Parent = label
+	local info = TweenInfo.new(0.9, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	TweenService:Create(bb, info, { StudsOffset = Vector3.new(0, 6, 0) }):Play()
+	TweenService:Create(label, info, { TextTransparency = 1 }):Play()
+	TweenService:Create(stroke, info, { Transparency = 1 }):Play()
+	Debris:AddItem(a, 1)
+end
+
+function Effects.Pop(pos: Vector3, color: Color3, coins: number, id: string)
+	-- rubber shreds
+	for _ = 1, 9 do
+		local p = Instance.new("Part")
+		p.Anchored = true
+		p.CanCollide = false
+		p.CanQuery = false
+		p.CanTouch = false
+		p.Material = Enum.Material.SmoothPlastic
+		p.Color = color
+		p.Size = Vector3.new(rng:NextNumber(0.4, 0.9), 0.15, rng:NextNumber(0.4, 0.9))
+		p.CFrame = CFrame.new(pos) * CFrame.Angles(rng:NextNumber(0, 6), rng:NextNumber(0, 6), 0)
+		p.Parent = fxFolder
+		local dir = Vector3.new(rng:NextNumber(-1, 1), rng:NextNumber(-0.2, 1), rng:NextNumber(-1, 1)).Unit
+		local goal = CFrame.new(pos + dir * rng:NextNumber(3, 6)) * CFrame.Angles(rng:NextNumber(0, 6), rng:NextNumber(0, 6), 0)
+		TweenService:Create(p, TweenInfo.new(0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { CFrame = goal, Transparency = 1 }):Play()
+		Debris:AddItem(p, 0.5)
+	end
+	-- white flash ring
+	local ring = Instance.new("Part")
+	ring.Shape = Enum.PartType.Ball
+	ring.Anchored = true
+	ring.CanCollide = false
+	ring.CanQuery = false
+	ring.Material = Enum.Material.Neon
+	ring.Color = Color3.new(1, 1, 1)
+	ring.Size = Vector3.new(1, 1, 1)
+	ring.Transparency = 0.3
+	ring.Position = pos
+	ring.Parent = fxFolder
+	TweenService:Create(ring, TweenInfo.new(0.2), { Size = Vector3.new(6, 6, 6), Transparency = 1 }):Play()
+	Debris:AddItem(ring, 0.25)
+
+	if coins > 0 then
+		Effects.FloatText(pos, "+$" .. Util.Abbrev(coins), Color3.fromRGB(255, 220, 60))
+	end
+	local def = Config.Get(id)
+	local rare = def and def.chance >= 500
+	Effects.Play(if rare then "RareRoll" else "Pop", pos, rng:NextNumber(0.9, 1.15))
+end
+
+function Effects.Shot(from: Vector3, to: Vector3, color: Color3, splash: boolean)
+	local dist = (to - from).Magnitude
+	local beam = Instance.new("Part")
+	beam.Anchored = true
+	beam.CanCollide = false
+	beam.CanQuery = false
+	beam.CanTouch = false
+	beam.Material = Enum.Material.Neon
+	beam.Color = color
+	beam.Size = Vector3.new(0.25, 0.25, dist)
+	beam.CFrame = CFrame.lookAt(from, to) * CFrame.new(0, 0, -dist / 2)
+	beam.Parent = fxFolder
+	TweenService:Create(beam, TweenInfo.new(0.12), { Transparency = 1, Size = Vector3.new(0.05, 0.05, dist) }):Play()
+	Debris:AddItem(beam, 0.15)
+	if splash then
+		local boom = Instance.new("Part")
+		boom.Shape = Enum.PartType.Ball
+		boom.Anchored = true
+		boom.CanCollide = false
+		boom.CanQuery = false
+		boom.Material = Enum.Material.Neon
+		boom.Color = Color3.fromRGB(255, 160, 40)
+		boom.Size = Vector3.new(1, 1, 1)
+		boom.Position = to
+		boom.Transparency = 0.2
+		boom.Parent = fxFolder
+		TweenService:Create(boom, TweenInfo.new(0.25), { Size = Vector3.new(9, 9, 9), Transparency = 1 }):Play()
+		Debris:AddItem(boom, 0.3)
+	end
+end
+
+return Effects
+]]></ProtectedString></Properties></Item>
+<Item class="LocalScript" referent="RBX0000000E"><Properties><string name="Name">Main</string><ProtectedString name="Source"><![CDATA[-- Client entry point: wires remotes to the UI, placement and effects.
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Effects = require(script.Parent.Effects)
+local Placement = require(script.Parent.Placement)
+local UI = require(script.Parent.UI)
+
+local remotes = ReplicatedStorage:WaitForChild("Remotes") :: Folder
+
+local state = {
+	data = nil,
+	stats = nil,
+}
+
+UI.Init(remotes, state)
+Placement.Init(remotes, UI.SetHint, UI.Toast, UI.Available)
+
+remotes:WaitForChild("DataChanged").OnClientEvent:Connect(function(data, stats)
+	state.data = data
+	state.stats = stats
+	UI.Refresh()
+end)
+
+remotes:WaitForChild("WaveState").OnClientEvent:Connect(function(w)
+	UI.SetWave(w)
+end)
+
+remotes:WaitForChild("Popped").OnClientEvent:Connect(function(pos, color, coins, id)
+	Effects.Pop(pos, color, coins, id)
+end)
+
+remotes:WaitForChild("Shot").OnClientEvent:Connect(function(from, to, color, splash)
+	Effects.Shot(from, to, color, splash)
+end)
+
+remotes:WaitForChild("Notify").OnClientEvent:Connect(function(text, color)
+	UI.Toast(text, color)
+end)
+
+remotes:WaitForChild("PlaySound").OnClientEvent:Connect(function(name)
+	Effects.Play(name)
+end)
+
+UI.SetWave({ running = false, wave = 0, lives = 20, maxLives = 20 })
+UI.Toast("Welcome! Roll 🎲 for turrets, place them on your base, then press Start", Color3.fromRGB(255, 230, 120))
+]]></ProtectedString></Properties></Item>
+<Item class="ModuleScript" referent="RBX0000000F"><Properties><string name="Name">Placement</string><ProtectedString name="Source"><![CDATA[-- Turret placement with a green/red ghost preview, plus delete mode.
+local GuiService = game:GetService("GuiService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+
+local Config = require(ReplicatedStorage.Shared.Config)
+local Util = require(ReplicatedStorage.Shared.Util)
+local Effects = require(script.Parent.Effects)
+
+local player = Players.LocalPlayer
+local camera = workspace.CurrentCamera
+
+local Placement = {}
+
+local remotes: any
+local onHint: (string?) -> ()
+local onNotify: (string, Color3?) -> ()
+local getAvailable: (string) -> number
+
+local activeId: string? = nil
+local deleteMode = false
+local ghost: Model? = nil
+local yaw = 0
+local lastPos: Vector3? = nil
+local lastValid = false
+local pointer: Vector2? = nil
+local busy = false
+local renderConn: RBXScriptConnection? = nil
+
+local GREEN = Color3.fromRGB(80, 255, 110)
+local RED = Color3.fromRGB(255, 70, 70)
+
+function Placement.MyPlot(): Model?
+	local index = player:GetAttribute("PlotIndex")
+	local plots = workspace:FindFirstChild("Plots")
+	return if index and plots then plots:FindFirstChild("Plot" .. index) :: Model? else nil
+end
+
+local function myTurretPositions(): { Vector3 }
+	local out = {}
+	local plot = Placement.MyPlot()
+	if plot then
+		for _, m in plot.Turrets:GetChildren() do
+			if m:IsA("Model") and m.PrimaryPart then
+				table.insert(out, m.PrimaryPart.Position)
+			end
+		end
+	end
+	return out
+end
+
+function Placement.PlacedCount(id: string): number
+	local n = 0
+	local plot = Placement.MyPlot()
+	if plot then
+		for _, m in plot.Turrets:GetChildren() do
+			if m:GetAttribute("TurretId") == id then
+				n += 1
+			end
+		end
+	end
+	return n
+end
+
+function Placement.TotalPlaced(): number
+	local plot = Placement.MyPlot()
+	return if plot then #plot.Turrets:GetChildren() else 0
+end
+
+local function makeGhost(def): Model
+	local m = Instance.new("Model")
+	m.Name = "PlacementGhost"
+	local function p(size: Vector3, offset: CFrame, shape: Enum.PartType?)
+		local part = Instance.new("Part")
+		part.Anchored = true
+		part.CanCollide = false
+		part.CanQuery = false
+		part.CanTouch = false
+		part.Material = Enum.Material.ForceField
+		part.Transparency = 0.2
+		part.Size = size
+		if shape then
+			part.Shape = shape
+		end
+		part:SetAttribute("Offset", offset)
+		part.Parent = m
+		return part
+	end
+	p(Vector3.new(1.2, 5.5, 5.5), CFrame.new(0, 0.6, 0) * CFrame.Angles(0, 0, math.rad(90)), Enum.PartType.Cylinder)
+	p(Vector3.new(3, 2.2, 3.2), CFrame.new(0, 3.6, 0))
+	p(Vector3.new(0.7, 0.7, 3.2), CFrame.new(0, 3.7, -3))
+	local ring = p(Vector3.new(0.2, def.range * 2, def.range * 2), CFrame.new(0, 0.3, 0) * CFrame.Angles(0, 0, math.rad(90)), Enum.PartType.Cylinder)
+	ring.Material = Enum.Material.Neon
+	ring.Transparency = 0.85
+	ring.Name = "Range"
+	m.Parent = workspace
+	return m
+end
+
+local function setGhost(cf: CFrame, valid: boolean)
+	if not ghost then
+		return
+	end
+	for _, part in ghost:GetChildren() do
+		if part:IsA("BasePart") then
+			part.CFrame = cf * (part:GetAttribute("Offset") :: CFrame)
+			part.Color = if valid then GREEN else RED
+		end
+	end
+end
+
+local function screenRay(screen: Vector2)
+	local ray = camera:ViewportPointToRay(screen.X, screen.Y)
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Include
+	local plots = workspace:FindFirstChild("Plots")
+	params.FilterDescendantsInstances = if plots then { plots } else {}
+	return workspace:Raycast(ray.Origin, ray.Direction * 600, params)
+end
+
+local function currentScreenPoint(): Vector2
+	if pointer then
+		return pointer
+	end
+	return UserInputService:GetMouseLocation()
+end
+
+local function update()
+	if not activeId or not ghost then
+		return
+	end
+	local plot = Placement.MyPlot()
+	local hit = screenRay(currentScreenPoint())
+	if not plot or not hit then
+		lastPos = nil
+		setGhost(CFrame.new(0, -500, 0), false)
+		return
+	end
+	local p = hit.Position
+	local pos = Vector3.new(math.round(p.X * 2) / 2, Config.GroundY, math.round(p.Z * 2) / 2)
+	local origin = plot:GetAttribute("Origin") :: Vector3
+	local ok = Util.CanPlace(origin, pos, myTurretPositions())
+	lastPos = pos
+	lastValid = ok
+	setGhost(CFrame.new(pos) * CFrame.Angles(0, math.rad(yaw), 0), ok)
+end
+
+function Placement.Cancel()
+	activeId = nil
+	if ghost then
+		ghost:Destroy()
+		ghost = nil
+	end
+	if renderConn then
+		renderConn:Disconnect()
+		renderConn = nil
+	end
+	if not deleteMode then
+		onHint(nil)
+	end
+end
+
+function Placement.Start(id: string)
+	Placement.SetDeleteMode(false)
+	Placement.Cancel()
+	local def = Config.Get(id)
+	if not def then
+		return
+	end
+	activeId = id
+	ghost = makeGhost(def)
+	yaw = 0
+	pointer = nil
+	renderConn = RunService.RenderStepped:Connect(update)
+	onHint(string.format("Placing %s  •  Click to place  •  R = rotate  •  Q = cancel", def.name))
+end
+
+function Placement.SetDeleteMode(on: boolean)
+	deleteMode = on
+	if on then
+		Placement.Cancel()
+		onHint("Delete mode  •  Click a turret to remove it  •  Q = exit")
+	else
+		onHint(nil)
+	end
+end
+
+function Placement.IsDeleteMode(): boolean
+	return deleteMode
+end
+
+local function tryPlace()
+	if busy or not activeId or not lastPos then
+		return
+	end
+	if not lastValid then
+		onNotify("Can't place here", RED)
+		return
+	end
+	busy = true
+	local id = activeId
+	local ok, reason = (remotes:FindFirstChild("Place") :: RemoteFunction):InvokeServer(id, lastPos, yaw)
+	busy = false
+	if ok then
+		Effects.Play("Place", lastPos)
+		if getAvailable(id) <= 0 then
+			Placement.Cancel()
+		end
+	else
+		onNotify(reason or "Can't place here", RED)
+	end
+end
+
+local function tryDelete(screen: Vector2)
+	local hit = screenRay(screen)
+	local plot = Placement.MyPlot()
+	if not hit or not plot then
+		return
+	end
+	local inst: Instance? = hit.Instance
+	while inst and inst.Parent ~= plot.Turrets do
+		inst = inst.Parent
+	end
+	if inst then
+		(remotes:FindFirstChild("RemoveTurret") :: RemoteEvent):FireServer(inst)
+		Effects.Play("Click")
+	end
+end
+
+function Placement.Init(remoteFolder: Folder, hint: (string?) -> (), notify: (string, Color3?) -> (), available: (string) -> number)
+	remotes = remoteFolder
+	onHint = hint
+	onNotify = notify
+	getAvailable = available
+
+	UserInputService.InputBegan:Connect(function(input, processed)
+		if input.KeyCode == Enum.KeyCode.Q or input.KeyCode == Enum.KeyCode.Escape then
+			if activeId then
+				Placement.Cancel()
+			elseif deleteMode then
+				Placement.SetDeleteMode(false)
+			end
+			return
+		end
+		if input.KeyCode == Enum.KeyCode.R and activeId and not processed then
+			yaw = (yaw + 45) % 360
+			return
+		end
+		if processed then
+			return
+		end
+		local isClick = input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch
+		if not isClick then
+			return
+		end
+		if input.UserInputType == Enum.UserInputType.Touch then
+			local inset = GuiService:GetGuiInset() -- touch Position excludes the top bar inset
+			pointer = Vector2.new(input.Position.X, input.Position.Y) + inset
+			update()
+		else
+			pointer = nil
+		end
+		if activeId then
+			tryPlace()
+		elseif deleteMode then
+			tryDelete(currentScreenPoint())
+		end
+	end)
+end
+
+return Placement
+]]></ProtectedString></Properties></Item>
+<Item class="ModuleScript" referent="RBX00000010"><Properties><string name="Name">UI</string><ProtectedString name="Source"><![CDATA[-- All on-screen UI, built in code: HUD, roll reel, turret inventory,
+-- upgrades (skill tree), index and toasts.
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
+
+local Config = require(ReplicatedStorage.Shared.Config)
+local Util = require(ReplicatedStorage.Shared.Util)
+local Effects = require(script.Parent.Effects)
+local Placement = require(script.Parent.Placement)
+
+local player = Players.LocalPlayer
+
+local UI = {}
+
+local FONT = Enum.Font.FredokaOne
+local WHITE = Color3.new(1, 1, 1)
+local BLUE = Color3.fromRGB(45, 120, 235)
+local GREEN = Color3.fromRGB(70, 200, 80)
+local RED = Color3.fromRGB(230, 60, 60)
+local PANEL = Color3.fromRGB(35, 95, 200)
+
+local remotes: any
+local state: any
+local gui: ScreenGui
+local refs: { [string]: any } = {}
+
+---------------------------------------------------------------------- helpers
+local function create(className: string, props: { [string]: any }?, children: { Instance }?)
+	local inst = Instance.new(className)
+	local p: { [string]: any } = props or {}
+	local kids: { Instance } = children or {}
+	for k, v in p do
+		if k ~= "Parent" then
+			(inst :: any)[k] = v
+		end
+	end
+	for _, c in kids do
+		c.Parent = inst
+	end
+	if props and props.Parent then
+		inst.Parent = props.Parent
+	end
+	return inst
+end
+
+local function corner(r: number?)
+	return create("UICorner", { CornerRadius = UDim.new(0, r or 12) })
+end
+
+local function stroke(thick: number?, color: Color3?)
+	return create("UIStroke", { Thickness = thick or 3, Color = color or Color3.new(0, 0, 0), ApplyStrokeMode = Enum.ApplyStrokeMode.Border })
+end
+
+local function textStroke(thick: number?)
+	return create("UIStroke", { Thickness = thick or 2.5, Color = Color3.new(0, 0, 0) })
+end
+
+local function gradient(top: Color3, bottom: Color3)
+	return create("UIGradient", { Rotation = 90, Color = ColorSequence.new(top, bottom) })
+end
+
+local function label(props)
+	props.BackgroundTransparency = props.BackgroundTransparency or 1
+	props.Font = props.Font or FONT
+	props.TextColor3 = props.TextColor3 or WHITE
+	props.TextScaled = if props.TextScaled == nil then true else props.TextScaled
+	return create("TextLabel", props, { textStroke() })
+end
+
+local function button(props, color: Color3, onClick: () -> ())
+	props.BackgroundColor3 = color
+	props.Font = props.Font or FONT
+	props.TextColor3 = props.TextColor3 or WHITE
+	props.TextScaled = true
+	props.AutoButtonColor = true
+	local b = create("TextButton", props, {
+		corner(14),
+		stroke(3),
+		gradient(Color3.new(1, 1, 1), Color3.fromRGB(190, 190, 190)),
+		create("UITextSizeConstraint", { MaxTextSize = 34 }),
+		create("UIPadding", { PaddingTop = UDim.new(0, 6), PaddingBottom = UDim.new(0, 6), PaddingLeft = UDim.new(0, 6), PaddingRight = UDim.new(0, 6) }),
+	}) :: TextButton
+	b.MouseButton1Click:Connect(function()
+		Effects.Play("Click")
+		local scale = b:FindFirstChildOfClass("UIScale") or create("UIScale", { Parent = b })
+		scale.Scale = 0.9
+		TweenService:Create(scale, TweenInfo.new(0.15, Enum.EasingStyle.Back), { Scale = 1 }):Play()
+		onClick()
+	end)
+	return b
+end
+
+local function remote(name: string): any
+	return remotes:FindFirstChild(name)
+end
+
+---------------------------------------------------------------------- toasts
+function UI.Toast(text: string, color: Color3?)
+	local holder = refs.toasts
+	if not holder then
+		return
+	end
+	local t = label({
+		Size = UDim2.new(1, 0, 0, 34),
+		Text = text,
+		TextColor3 = color or WHITE,
+		TextTransparency = 1,
+		Parent = holder,
+	})
+	TweenService:Create(t, TweenInfo.new(0.2), { TextTransparency = 0 }):Play()
+	task.delay(3.5, function()
+		local tw = TweenService:Create(t, TweenInfo.new(0.4), { TextTransparency = 1 })
+		tw:Play()
+		tw.Completed:Wait()
+		t:Destroy()
+	end)
+	local children = holder:GetChildren()
+	local labels = 0
+	for _, c in children do
+		if c:IsA("TextLabel") then
+			labels += 1
+		end
+	end
+	if labels > 5 then
+		for _, c in children do
+			if c:IsA("TextLabel") then
+				c:Destroy()
+				break
+			end
+		end
+	end
+end
+
+---------------------------------------------------------------------- panels
+local panels: { [string]: Frame } = {}
+
+local function closeAll(except: string?)
+	for name, p in panels do
+		if name ~= except then
+			p.Visible = false
+		end
+	end
+end
+
+local function makePanel(name: string, title: string, size: UDim2, position: UDim2, anchor: Vector2)
+	local frame = create("Frame", {
+		Name = name,
+		Size = size,
+		Position = position,
+		AnchorPoint = anchor,
+		BackgroundColor3 = PANEL,
+		Visible = false,
+		Parent = gui,
+	}, { corner(18), stroke(4), gradient(Color3.fromRGB(120, 190, 255), Color3.fromRGB(200, 200, 230)) }) :: Frame
+	label({ Size = UDim2.new(1, -70, 0, 44), Position = UDim2.fromOffset(16, 8), Text = title, TextXAlignment = Enum.TextXAlignment.Left, Parent = frame })
+	button({ Size = UDim2.fromOffset(44, 44), Position = UDim2.new(1, -52, 0, 8), Text = "X" }, RED, function()
+		frame.Visible = false
+	end).Parent = frame
+	local scroll = create("ScrollingFrame", {
+		Name = "List",
+		Size = UDim2.new(1, -24, 1, -70),
+		Position = UDim2.fromOffset(12, 60),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ScrollBarThickness = 8,
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		CanvasSize = UDim2.new(),
+		Parent = frame,
+	})
+	panels[name] = frame
+	return frame, scroll
+end
+
+local function toggle(name: string)
+	local p = panels[name]
+	local show = not p.Visible
+	closeAll()
+	p.Visible = show
+	if show then
+		UI.Refresh()
+	end
+end
+
+---------------------------------------------------------------------- inventory
+local function availableCount(id: string): number
+	local owned = state.data and state.data.inventory[id] or 0
+	return owned - Placement.PlacedCount(id)
+end
+
+local function rebuildTurrets()
+	local list = refs.turretList
+	for _, c in list:GetChildren() do
+		if c:IsA("GuiObject") then
+			c:Destroy()
+		end
+	end
+	if not state.data then
+		return
+	end
+	for i = #Config.Turrets, 1, -1 do
+		local def = Config.Turrets[i]
+		local owned = state.data.inventory[def.id] or 0
+		if owned > 0 then
+			local free = availableCount(def.id)
+			local card = button({
+				Name = def.id,
+				Size = UDim2.fromOffset(120, 120),
+				Text = "",
+				LayoutOrder = -def.chance,
+			}, Config.RarityColors[def.rarity]:Lerp(Color3.new(0.2, 0.2, 0.3), 0.35), function()
+				if availableCount(def.id) > 0 then
+					closeAll()
+					Placement.Start(def.id)
+				else
+					UI.Toast("All your " .. def.name .. "s are placed", RED)
+				end
+			end)
+			label({ Size = UDim2.new(1, 0, 0.42, 0), Position = UDim2.fromScale(0, 0.04), Text = def.name, Parent = card })
+			label({ Size = UDim2.new(1, 0, 0.22, 0), Position = UDim2.fromScale(0, 0.48), Text = string.format("x%d free", free), TextColor3 = if free > 0 then Color3.fromRGB(180, 255, 180) else Color3.fromRGB(255, 160, 160), Parent = card })
+			label({ Size = UDim2.new(1, 0, 0.2, 0), Position = UDim2.fromScale(0, 0.74), Text = Util.ChanceText(def.chance), TextColor3 = Config.RarityColors[def.rarity], Parent = card })
+			card.Parent = list
+		end
+	end
+	local stats = state.stats
+	refs.slots.Text = string.format("Placed %d / %d", Placement.TotalPlaced(), stats and stats.maxTurrets or Config.BaseMaxTurrets)
+end
+
+---------------------------------------------------------------------- upgrades
+local function rebuildUpgrades()
+	local list = refs.upgradeList
+	for _, c in list:GetChildren() do
+		if c:IsA("GuiObject") then
+			c:Destroy()
+		end
+	end
+	if not state.data then
+		return
+	end
+	local owned = state.data.upgrades
+	for i, up in Config.Upgrades do
+		local has = owned[up.id] == true
+		local locked = up.requires ~= nil and not owned[up.requires]
+		local affordable = state.data.coins >= up.cost
+		local color = if has then GREEN elseif locked then Color3.fromRGB(110, 110, 120) elseif affordable then BLUE else Color3.fromRGB(70, 90, 140)
+		local card = button({ Name = up.id, Size = UDim2.fromOffset(150, 150), Text = "", LayoutOrder = i }, color, function()
+			if has or locked then
+				return
+			end
+			local ok, reason = remote("BuyUpgrade"):InvokeServer(up.id)
+			if ok then
+				Effects.Play("Buy")
+				UI.Toast("Unlocked " .. up.name .. "!", Color3.fromRGB(150, 255, 150))
+			else
+				UI.Toast(reason or "Can't buy", RED)
+			end
+		end)
+		label({ Size = UDim2.new(1, 0, 0.3, 0), Position = UDim2.fromScale(0, 0.02), Text = up.icon, Parent = card })
+		label({ Size = UDim2.new(1, 0, 0.2, 0), Position = UDim2.fromScale(0, 0.33), Text = up.name, Parent = card })
+		label({ Size = UDim2.new(1, 0, 0.16, 0), Position = UDim2.fromScale(0, 0.55), Text = up.desc, TextColor3 = Color3.fromRGB(230, 240, 255), Parent = card })
+		local bottom = if has then "OWNED" elseif locked then ("🔒 " .. Config.Get(up.requires).name) else ("$" .. Util.Abbrev(up.cost))
+		label({ Size = UDim2.new(1, 0, 0.2, 0), Position = UDim2.fromScale(0, 0.76), Text = bottom, TextColor3 = if has then WHITE else Color3.fromRGB(255, 225, 80), Parent = card })
+		card.Parent = list
+	end
+end
+
+---------------------------------------------------------------------- index
+local function rebuildIndex()
+	local list = refs.indexList
+	for _, c in list:GetChildren() do
+		if c:IsA("GuiObject") then
+			c:Destroy()
+		end
+	end
+	if not state.data then
+		return
+	end
+	local found = 0
+	for i, def in Config.Turrets do
+		local known = state.data.discovered[def.id] == true
+		if known then
+			found += 1
+		end
+		local card = create("Frame", {
+			Size = UDim2.fromOffset(150, 150),
+			LayoutOrder = i,
+			BackgroundColor3 = if known then Config.RarityColors[def.rarity]:Lerp(Color3.new(0.15, 0.15, 0.25), 0.4) else Color3.fromRGB(60, 60, 70),
+			Parent = list,
+		}, { corner(14), stroke(3) })
+		label({ Size = UDim2.new(1, 0, 0.24, 0), Position = UDim2.fromScale(0, 0.04), Text = if known then def.name else "???", Parent = card })
+		label({ Size = UDim2.new(1, 0, 0.17, 0), Position = UDim2.fromScale(0, 0.3), Text = def.rarity, TextColor3 = Config.RarityColors[def.rarity], Parent = card })
+		label({
+			Size = UDim2.new(1, -8, 0.3, 0),
+			Position = UDim2.fromScale(0, 0.48),
+			Text = if known then string.format("DMG %s  RNG %d\n%.1f shots/s%s", Util.Abbrev(def.damage), def.range, def.fireRate, if def.splash then "  SPLASH" else "") else "Not discovered",
+			TextColor3 = Color3.fromRGB(230, 235, 255),
+			Parent = card,
+		})
+		label({ Size = UDim2.new(1, 0, 0.17, 0), Position = UDim2.fromScale(0, 0.8), Text = Util.ChanceText(def.chance), TextColor3 = Color3.fromRGB(255, 225, 80), Parent = card })
+	end
+	refs.indexTitle.Text = string.format("Index  %d / %d", found, #Config.Turrets)
+end
+
+---------------------------------------------------------------------- roll reel
+local rolling = false
+local autoRoll = false
+local reelToken = 0
+
+local function setReelLine(lbl: TextLabel, def)
+	lbl.Text = def.name .. "   " .. Util.ChanceText(def.chance)
+	lbl.TextColor3 = Config.RarityColors[def.rarity]
+end
+
+local function animateReel(resultId: string?, duration: number)
+	reelToken += 1
+	local token = reelToken
+	local reel = refs.reel
+	reel.Visible = true
+	local luck = state.stats and state.stats.luck or 1
+	local lines = { reel.Top, reel.Mid, reel.Bot }
+	local seq = {}
+	for i = 1, 3 do
+		seq[i] = Util.RollFrom(Config.Turrets, luck)
+	end
+	local elapsed = 0
+	local interval = 0.04
+	while elapsed < duration do
+		table.remove(seq, 1)
+		table.insert(seq, Util.RollFrom(Config.Turrets, luck * 3))
+		for i = 1, 3 do
+			setReelLine(lines[i], seq[i])
+		end
+		Effects.Play("Roll", nil, 1.4)
+		task.wait(interval)
+		elapsed += interval
+		interval = math.min(interval * 1.15, 0.22)
+	end
+	if resultId then
+		local def = Config.Get(resultId)
+		setReelLine(reel.Mid, def)
+		reel.Top.Text = ""
+		reel.Bot.Text = ""
+		local scale = reel.Mid:FindFirstChildOfClass("UIScale")
+		scale.Scale = 1.5
+		TweenService:Create(scale, TweenInfo.new(0.35, Enum.EasingStyle.Back), { Scale = 1 }):Play()
+		if def.chance >= Config.RareAnnounceChance then
+			Effects.Play("RareRoll")
+			local flash = refs.flash
+			flash.BackgroundColor3 = Config.RarityColors[def.rarity]
+			flash.BackgroundTransparency = 0.3
+			TweenService:Create(flash, TweenInfo.new(0.8), { BackgroundTransparency = 1 }):Play()
+		end
+	end
+	task.delay(1.6, function()
+		if reelToken == token then
+			reel.Visible = false
+		end
+	end)
+end
+
+local function doRoll()
+	if rolling then
+		return
+	end
+	rolling = true
+	local cooldown = state.stats and state.stats.rollCooldown or Config.RollCooldown
+	local result = nil
+	local done = false
+	task.spawn(function()
+		result = remote("Roll"):InvokeServer()
+		done = true
+	end)
+	-- cooldown bar
+	local fill = refs.rollFill
+	fill.Size = UDim2.fromScale(0, 1)
+	TweenService:Create(fill, TweenInfo.new(cooldown, Enum.EasingStyle.Linear), { Size = UDim2.fromScale(1, 1) }):Play()
+	local spin = math.min(cooldown * 0.85, 1.4)
+	animateReel(nil, spin)
+	local waited = 0
+	while not done and waited < 5 do
+		task.wait(0.05)
+		waited += 0.05
+	end
+	if result then
+		animateReel(result.id, 0)
+		local def = Config.Get(result.id)
+		if result.isNew then
+			UI.Toast("NEW! " .. def.name .. " added to your Index", Config.RarityColors[def.rarity])
+		end
+	end
+	task.wait(math.max(0, cooldown - spin))
+	rolling = false
+end
+
+---------------------------------------------------------------------- build
+function UI.Init(remoteFolder: Folder, sharedState)
+	remotes = remoteFolder
+	state = sharedState
+	gui = create("ScreenGui", {
+		Name = "PopUI",
+		ResetOnSpawn = false,
+		IgnoreGuiInset = true,
+		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+		Parent = player:WaitForChild("PlayerGui"),
+	}) :: ScreenGui
+	create("UIScale", { Name = "Scale", Parent = gui })
+
+	refs.flash = create("Frame", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, BorderSizePixel = 0, ZIndex = 0, Parent = gui })
+
+	-- coins
+	local coins = create("Frame", {
+		Size = UDim2.fromOffset(260, 66),
+		Position = UDim2.new(0, 16, 1, -86),
+		BackgroundTransparency = 1,
+		Parent = gui,
+	})
+	create("Frame", { Size = UDim2.fromOffset(56, 56), Position = UDim2.fromOffset(0, 5), BackgroundColor3 = Color3.fromRGB(255, 200, 40), Parent = coins }, {
+		corner(28),
+		stroke(3, Color3.fromRGB(150, 100, 10)),
+		label({ Size = UDim2.fromScale(1, 1), Text = "$" }),
+	})
+	refs.coins = label({ Size = UDim2.new(1, -66, 1, 0), Position = UDim2.fromOffset(66, 0), Text = "$0", TextXAlignment = Enum.TextXAlignment.Left, Parent = coins })
+	refs.luck = label({ Size = UDim2.fromOffset(260, 26), Position = UDim2.new(0, 16, 1, -116), Text = "🍀 Luck x1", TextXAlignment = Enum.TextXAlignment.Left, Parent = gui })
+
+	-- wave info
+	local wave = create("Frame", {
+		Size = UDim2.fromOffset(300, 74),
+		Position = UDim2.new(0.5, 0, 0, 12),
+		AnchorPoint = Vector2.new(0.5, 0),
+		BackgroundColor3 = PANEL,
+		BackgroundTransparency = 0.15,
+		Parent = gui,
+	}, { corner(16), stroke(3) })
+	refs.wave = label({ Size = UDim2.new(1, 0, 0.5, 0), Position = UDim2.fromScale(0, 0.04), Text = "Wave 0", Parent = wave })
+	local livesBar = create("Frame", { Size = UDim2.new(0.86, 0, 0.32, 0), Position = UDim2.fromScale(0.07, 0.58), BackgroundColor3 = Color3.fromRGB(60, 20, 20), Parent = wave }, { corner(10), stroke(2) })
+	refs.livesFill = create("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.fromRGB(240, 70, 80), Parent = livesBar }, { corner(10) })
+	refs.lives = label({ Size = UDim2.fromScale(1, 1), Text = "❤ 20 / 20", ZIndex = 2, Parent = livesBar })
+
+	-- toasts
+	refs.toasts = create("Frame", {
+		Size = UDim2.new(0.6, 0, 0, 220),
+		Position = UDim2.new(0.5, 0, 0, 96),
+		AnchorPoint = Vector2.new(0.5, 0),
+		BackgroundTransparency = 1,
+		Parent = gui,
+	}, { create("UIListLayout", { HorizontalAlignment = Enum.HorizontalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder }) })
+
+	-- start button
+	refs.start = button({
+		Size = UDim2.fromOffset(240, 76),
+		Position = UDim2.new(0.5, 0, 1, -200),
+		AnchorPoint = Vector2.new(0.5, 0),
+		Text = "▶ Start",
+		Parent = gui,
+	}, GREEN, function()
+		remote("StartWaves"):FireServer()
+	end)
+
+	-- roll button + cooldown bar
+	local rollBtn = button({
+		Size = UDim2.fromOffset(240, 84),
+		Position = UDim2.new(0.5, 0, 1, -110),
+		AnchorPoint = Vector2.new(0.5, 0),
+		Text = "🎲 ROLL",
+		Parent = gui,
+	}, Color3.fromRGB(255, 170, 30), function()
+		task.spawn(doRoll)
+	end)
+	local barBg = create("Frame", { Size = UDim2.new(1, -20, 0, 8), Position = UDim2.new(0, 10, 1, -14), BackgroundColor3 = Color3.fromRGB(80, 50, 10), ZIndex = 3, Parent = rollBtn }, { corner(4) })
+	refs.rollFill = create("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = WHITE, ZIndex = 4, Parent = barBg }, { corner(4) })
+	refs.auto = button({
+		Size = UDim2.fromOffset(130, 56),
+		Position = UDim2.new(0.5, 132, 1, -96),
+		Text = "Auto: OFF",
+		Visible = false,
+		Parent = gui,
+	}, Color3.fromRGB(120, 120, 130), function()
+		autoRoll = not autoRoll
+		refs.auto.Text = if autoRoll then "Auto: ON" else "Auto: OFF"
+		refs.auto.BackgroundColor3 = if autoRoll then GREEN else Color3.fromRGB(120, 120, 130)
+		if autoRoll then
+			task.spawn(function()
+				while autoRoll do
+					doRoll()
+					task.wait(0.05)
+				end
+			end)
+		end
+	end)
+
+	-- reel
+	local reel = create("Frame", {
+		Name = "Reel",
+		Size = UDim2.fromOffset(460, 150),
+		Position = UDim2.fromScale(0.5, 0.36),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundTransparency = 1,
+		Visible = false,
+		Parent = gui,
+	})
+	label({ Name = "Top", Size = UDim2.new(1, 0, 0, 30), Position = UDim2.fromOffset(0, 0), TextTransparency = 0.45, Text = "", Parent = reel })
+	local mid = label({ Name = "Mid", Size = UDim2.new(1, -120, 0, 56), Position = UDim2.fromOffset(60, 44), Text = "", Parent = reel })
+	create("UIScale", { Parent = mid })
+	label({ Name = "Bot", Size = UDim2.new(1, 0, 0, 30), Position = UDim2.fromOffset(0, 112), TextTransparency = 0.45, Text = "", Parent = reel })
+	label({ Size = UDim2.fromOffset(50, 50), Position = UDim2.fromOffset(0, 47), Text = "➡", TextColor3 = Color3.fromRGB(255, 220, 40), Parent = reel })
+	label({ Size = UDim2.fromOffset(50, 50), Position = UDim2.new(1, -50, 0, 47), Text = "⬅", TextColor3 = Color3.fromRGB(255, 220, 40), Parent = reel })
+	refs.reel = reel
+
+	-- side menu
+	local menu = create("Frame", {
+		Size = UDim2.fromOffset(96, 420),
+		Position = UDim2.new(0, 16, 0.5, 0),
+		AnchorPoint = Vector2.new(0, 0.5),
+		BackgroundTransparency = 1,
+		Parent = gui,
+	}, { create("UIListLayout", { Padding = UDim.new(0, 10), SortOrder = Enum.SortOrder.LayoutOrder }) })
+	for i, info in {
+		{ "🏰\nTurrets", "Turrets", BLUE },
+		{ "⬆\nSkills", "Upgrades", Color3.fromRGB(150, 70, 230) },
+		{ "📖\nIndex", "Index", Color3.fromRGB(40, 170, 200) },
+	} do
+		button({ Size = UDim2.fromOffset(92, 92), Text = info[1], LayoutOrder = i, Parent = menu }, info[3], function()
+			toggle(info[2])
+		end)
+	end
+	button({ Size = UDim2.fromOffset(92, 60), Text = "🏠 Home", LayoutOrder = 4, Parent = menu }, Color3.fromRGB(240, 140, 40), function()
+		remote("GoHome"):FireServer()
+	end)
+
+	-- turrets panel (left, like the reference)
+	local tp, tList = makePanel("Turrets", "Turrets", UDim2.fromOffset(300, 460), UDim2.new(0, 124, 0.5, 0), Vector2.new(0, 0.5))
+	tList.Size = UDim2.new(1, -24, 1, -170)
+	create("UIGridLayout", { CellSize = UDim2.fromOffset(124, 124), CellPadding = UDim2.fromOffset(10, 10), SortOrder = Enum.SortOrder.LayoutOrder, Parent = tList })
+	refs.turretList = tList
+	refs.slots = label({ Size = UDim2.new(1, -24, 0, 26), Position = UDim2.new(0, 12, 1, -104), Text = "", Parent = tp })
+	button({ Size = UDim2.new(0.5, -18, 0, 54), Position = UDim2.new(0, 12, 1, -66), Text = "Remove All" }, RED, function()
+		Placement.Cancel()
+		remote("RemoveAll"):FireServer()
+		task.delay(0.3, UI.Refresh)
+	end).Parent = tp
+	button({ Size = UDim2.new(0.5, -18, 0, 54), Position = UDim2.new(0.5, 6, 1, -66), Text = "Delete" }, Color3.fromRGB(240, 140, 40), function()
+		closeAll()
+		Placement.SetDeleteMode(not Placement.IsDeleteMode())
+	end).Parent = tp
+
+	local _, uList = makePanel("Upgrades", "Skill Tree", UDim2.fromOffset(700, 470), UDim2.fromScale(0.5, 0.5), Vector2.new(0.5, 0.5))
+	create("UIGridLayout", { CellSize = UDim2.fromOffset(152, 152), CellPadding = UDim2.fromOffset(12, 12), SortOrder = Enum.SortOrder.LayoutOrder, Parent = uList })
+	refs.upgradeList = uList
+
+	local ip, iList = makePanel("Index", "Index", UDim2.fromOffset(700, 470), UDim2.fromScale(0.5, 0.5), Vector2.new(0.5, 0.5))
+	create("UIGridLayout", { CellSize = UDim2.fromOffset(152, 152), CellPadding = UDim2.fromOffset(12, 12), SortOrder = Enum.SortOrder.LayoutOrder, Parent = iList })
+	refs.indexList = iList
+	refs.indexTitle = ip:FindFirstChildOfClass("TextLabel")
+
+	-- placement hint
+	refs.hint = label({
+		Size = UDim2.fromOffset(700, 30),
+		Position = UDim2.new(0.5, 0, 1, -240),
+		AnchorPoint = Vector2.new(0.5, 0),
+		Text = "",
+		Visible = false,
+		Parent = gui,
+	})
+
+	-- scale UI down on small screens
+	local camera = workspace.CurrentCamera
+	local function rescale()
+		local vp = camera.ViewportSize
+		local uiScale = gui:FindFirstChild("Scale") :: UIScale
+		uiScale.Scale = math.clamp(math.min(vp.X / 1280, vp.Y / 720), 0.55, 1.2)
+	end
+	camera:GetPropertyChangedSignal("ViewportSize"):Connect(rescale)
+	rescale()
+
+	-- refresh inventory counts when turrets are added or removed on my plot
+	task.spawn(function()
+		local plot = nil
+		while not plot do
+			plot = Placement.MyPlot()
+			task.wait(0.5)
+		end
+		plot.Turrets.ChildAdded:Connect(function()
+			task.defer(UI.Refresh)
+		end)
+		plot.Turrets.ChildRemoved:Connect(function()
+			task.defer(UI.Refresh)
+		end)
+	end)
+end
+
+function UI.SetHint(text: string?)
+	refs.hint.Text = text or ""
+	refs.hint.Visible = text ~= nil
+end
+
+function UI.Available(id: string): number
+	return availableCount(id)
+end
+
+function UI.SetWave(w)
+	refs.wave.Text = if w.running then string.format("Wave %d", w.wave) else "Press Start!"
+	refs.lives.Text = string.format("❤ %d / %d", math.max(0, w.lives), w.maxLives)
+	refs.livesFill.Size = UDim2.fromScale(math.clamp(w.lives / w.maxLives, 0, 1), 1)
+	refs.start.Visible = not w.running
+end
+
+local shownCoins = 0
+local coinTween: Tween? = nil
+function UI.Refresh()
+	local data = state.data
+	if not data then
+		return
+	end
+	-- smooth coin counter
+	local target = data.coins
+	if coinTween then
+		coinTween:Cancel()
+	end
+	local nv = Instance.new("NumberValue")
+	nv.Value = shownCoins
+	nv.Changed:Connect(function(v)
+		shownCoins = v
+		refs.coins.Text = "$" .. Util.Abbrev(v)
+	end)
+	local tween = TweenService:Create(nv, TweenInfo.new(0.25), { Value = target })
+	coinTween = tween
+	tween:Play()
+
+	local stats = state.stats
+	if stats then
+		refs.luck.Text = string.format("🍀 Luck x%s   🎲 %s rolls", string.format("%.4g", stats.luck), Util.Abbrev(data.rolls))
+		refs.auto.Visible = stats.autoRoll
+	end
+	if panels.Turrets.Visible then
+		rebuildTurrets()
+	end
+	if panels.Upgrades.Visible then
+		rebuildUpgrades()
+	end
+	if panels.Index.Visible then
+		rebuildIndex()
+	end
+end
+
+return UI
+]]></ProtectedString></Properties></Item>
+</Item>
+</Item>
+</Item>
+</roblox>

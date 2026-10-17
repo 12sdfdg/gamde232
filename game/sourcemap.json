@@ -1,0 +1,146 @@
+{
+ "name": "PopBalloonRNG",
+ "className": "DataModel",
+ "children": [
+  {
+   "name": "ReplicatedStorage",
+   "className": "ReplicatedStorage",
+   "children": [
+    {
+     "name": "Shared",
+     "className": "Folder",
+     "children": [
+      {
+       "name": "Config",
+       "className": "ModuleScript",
+       "filePaths": [
+        "src/shared/Config.luau"
+       ]
+      },
+      {
+       "name": "Util",
+       "className": "ModuleScript",
+       "filePaths": [
+        "src/shared/Util.luau"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "ServerScriptService",
+   "className": "ServerScriptService",
+   "children": [
+    {
+     "name": "Server",
+     "className": "Folder",
+     "children": [
+      {
+       "name": "DataService",
+       "className": "ModuleScript",
+       "filePaths": [
+        "src/server/DataService.luau"
+       ]
+      },
+      {
+       "name": "LeaderboardService",
+       "className": "ModuleScript",
+       "filePaths": [
+        "src/server/LeaderboardService.luau"
+       ]
+      },
+      {
+       "name": "Main",
+       "className": "Script",
+       "filePaths": [
+        "src/server/Main.server.luau"
+       ]
+      },
+      {
+       "name": "MapBuilder",
+       "className": "ModuleScript",
+       "filePaths": [
+        "src/server/MapBuilder.luau"
+       ]
+      },
+      {
+       "name": "PlotService",
+       "className": "ModuleScript",
+       "filePaths": [
+        "src/server/PlotService.luau"
+       ]
+      },
+      {
+       "name": "RollService",
+       "className": "ModuleScript",
+       "filePaths": [
+        "src/server/RollService.luau"
+       ]
+      },
+      {
+       "name": "TurretService",
+       "className": "ModuleScript",
+       "filePaths": [
+        "src/server/TurretService.luau"
+       ]
+      },
+      {
+       "name": "WaveService",
+       "className": "ModuleScript",
+       "filePaths": [
+        "src/server/WaveService.luau"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "StarterPlayer",
+   "className": "StarterPlayer",
+   "children": [
+    {
+     "name": "StarterPlayerScripts",
+     "className": "StarterPlayerScripts",
+     "children": [
+      {
+       "name": "Client",
+       "className": "Folder",
+       "children": [
+        {
+         "name": "Effects",
+         "className": "ModuleScript",
+         "filePaths": [
+          "src/client/Effects.luau"
+         ]
+        },
+        {
+         "name": "Main",
+         "className": "LocalScript",
+         "filePaths": [
+          "src/client/Main.client.luau"
+         ]
+        },
+        {
+         "name": "Placement",
+         "className": "ModuleScript",
+         "filePaths": [
+          "src/client/Placement.luau"
+         ]
+        },
+        {
+         "name": "UI",
+         "className": "ModuleScript",
+         "filePaths": [
+          "src/client/UI.luau"
+         ]
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}
