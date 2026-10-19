@@ -1,0 +1,4124 @@
+<roblox version="4">
+  <Item class="Lighting" referent="0">
+    <Properties>
+      <string name="Name">Lighting</string>
+      <Color3 name="Ambient">
+        <R>0.45</R>
+        <G>0.45</G>
+        <B>0.55</B>
+      </Color3>
+      <float name="Brightness">2.5</float>
+      <float name="ClockTime">14.5</float>
+      <bool name="GlobalShadows">true</bool>
+      <Color3 name="OutdoorAmbient">
+        <R>0.6</R>
+        <G>0.6</G>
+        <B>0.7</B>
+      </Color3>
+    </Properties>
+  </Item>
+  <Item class="ReplicatedStorage" referent="1">
+    <Properties>
+      <string name="Name">ReplicatedStorage</string>
+    </Properties>
+    <Item class="Folder" referent="2">
+      <Properties>
+        <string name="Name">Shared</string>
+      </Properties>
+      <Item class="ModuleScript" referent="3">
+        <Properties>
+          <string name="Name">Config</string>
+          <string name="Source"><![CDATA[--!nonstrict
+-- Центральний конфіг гри. Весь баланс, ціни та ID монетизації — тут.
+-- Після створення Game Pass / Developer Product у Creator Hub впиши їх ID замість 0.
+
+local Config = {}
+
+Config.GAME_NAME = "Turbo Race Clicker"
+
+-- Змінюй версію ключа, щоб скинути прогрес усім гравцям (наприклад, після бета-тесту).
+Config.DATASTORE_NAME = "PlayerData_v1"
+Config.LEADERBOARD_STORE = "TotalWinsBoard_v1"
+
+-- ID твоєї Roblox-групи (справжня група на roblox.com). 0 = бонус вимкнено.
+Config.GROUP_ID = 0
+Config.GROUP_SPEED_BONUS = 0.10 -- +10% до швидкості за членство в групі
+
+-- У Studio покупки з ID = 0 видаються безкоштовно, щоб можна було тестувати.
+Config.TEST_PURCHASES_IN_STUDIO = true
+
+---------------------------------------------------------------------------
+-- Клікер
+---------------------------------------------------------------------------
+Config.Click = {
+	BaseGain = 1,
+	MaxClicksPerSecond = 20, -- усе, що понад цей ліміт, сервер ігнорує (антиавтоклікер)
+	AutoClicksPerSecond = 6, -- швидкість геймпаса Auto Clicker
+}
+
+---------------------------------------------------------------------------
+-- Забіг
+---------------------------------------------------------------------------
+Config.Race = {
+	LobbyTime = 20, -- секунд клікання між забігами
+	RaceTime = 12, -- тривалість фази забігу
+	ZoneLength = 250, -- довжина однієї зони (studs)
+	ZoneCount = 40,
+	-- Зона k потребує ZoneSpeedBase * ZoneSpeedGrowth^(k-1) швидкості.
+	-- 100 Speed = Зона 1 вже в першому забігу; Зона 40 ≈ 190M (20+ годин гри).
+	ZoneSpeedBase = 100,
+	ZoneSpeedGrowth = 1.45,
+	MinRunVelocity = 70, -- студів/сек, щоб короткі забіги не були нудними
+	TrackWidth = 64,
+	Lanes = 8,
+}
+
+-- Нагорода за досягнення зони i (сумується за всі пройдені зони).
+function Config.ZoneReward(zone: number): number
+	return math.floor(2 * 1.18 ^ (zone - 1))
+end
+
+function Config.SpeedForZone(zone: number): number
+	return Config.Race.ZoneSpeedBase * Config.Race.ZoneSpeedGrowth ^ (zone - 1)
+end
+
+function Config.DistanceForSpeed(speed: number): number
+	local race = Config.Race
+	local maxDistance = race.ZoneLength * race.ZoneCount
+	if speed < race.ZoneSpeedBase then
+		return race.ZoneLength * math.max(speed, 0) / race.ZoneSpeedBase
+	end
+	local zones = 1 + math.log(speed / race.ZoneSpeedBase) / math.log(race.ZoneSpeedGrowth)
+	return math.min(zones * race.ZoneLength, maxDistance)
+end
+
+function Config.ZoneForDistance(distance: number): number
+	return math.floor(distance / Config.Race.ZoneLength)
+end
+
+function Config.WinsForZone(zone: number): number
+	local total = 0
+	for i = 1, zone do
+		total += Config.ZoneReward(i)
+	end
+	return total
+end
+
+---------------------------------------------------------------------------
+-- Ребьорт
+---------------------------------------------------------------------------
+Config.Rebirth = {
+	BaseCost = 100,
+	CostGrowth = 2,
+	SpeedMultPerRebirth = 1, -- кожен ребьорт: +100% до набору швидкості
+	WinsMultPerRebirth = 0.25, -- кожен ребьорт: +25% до виграшів
+}
+
+function Config.RebirthCost(rebirths: number): number
+	return math.floor(Config.Rebirth.BaseCost * Config.Rebirth.CostGrowth ^ rebirths)
+end
+
+---------------------------------------------------------------------------
+-- Улюбленці
+---------------------------------------------------------------------------
+Config.Pets = {
+	BaseEquipSlots = 3,
+	ExtraSlotsPass = 3,
+	InventoryLimit = 60,
+}
+
+Config.Rarities = {
+	Common = { order = 1, color = Color3.fromRGB(190, 190, 190) },
+	Uncommon = { order = 2, color = Color3.fromRGB(85, 220, 95) },
+	Rare = { order = 3, color = Color3.fromRGB(70, 150, 255) },
+	Epic = { order = 4, color = Color3.fromRGB(180, 80, 255) },
+	Legendary = { order = 5, color = Color3.fromRGB(255, 190, 40) },
+	Mythic = { order = 6, color = Color3.fromRGB(255, 60, 120) },
+}
+
+-- boost — множник одного улюбленця. Загальний бонус = 1 + Σ(boost - 1) екіпірованих.
+-- chance — відсоток (сума в яйці = 100). Шанси показуються гравцям над яйцем.
+Config.Eggs = {
+	{
+		id = "Basic",
+		name = "Basic Egg",
+		cost = 15,
+		color = Color3.fromRGB(240, 235, 210),
+		pets = {
+			{ name = "Dog", icon = "🐶", rarity = "Common", boost = 1.2, chance = 45 },
+			{ name = "Cat", icon = "🐱", rarity = "Common", boost = 1.3, chance = 30 },
+			{ name = "Bunny", icon = "🐰", rarity = "Uncommon", boost = 1.5, chance = 15 },
+			{ name = "Fox", icon = "🦊", rarity = "Rare", boost = 2, chance = 8 },
+			{ name = "Unicorn", icon = "🦄", rarity = "Legendary", boost = 3.5, chance = 2 },
+		},
+	},
+	{
+		id = "Golden",
+		name = "Golden Egg",
+		cost = 400,
+		color = Color3.fromRGB(255, 205, 60),
+		pets = {
+			{ name = "Bee", icon = "🐝", rarity = "Uncommon", boost = 3, chance = 45 },
+			{ name = "Bear", icon = "🐻", rarity = "Rare", boost = 4, chance = 30 },
+			{ name = "Panda", icon = "🐼", rarity = "Rare", boost = 5.5, chance = 16 },
+			{ name = "Dragon", icon = "🐲", rarity = "Epic", boost = 9, chance = 7.5 },
+			{ name = "Phoenix", icon = "🔥", rarity = "Legendary", boost = 15, chance = 1.4 },
+			{ name = "Galaxy Cat", icon = "🌌", rarity = "Mythic", boost = 40, chance = 0.1 },
+		},
+	},
+	{
+		id = "Cosmic",
+		name = "Cosmic Egg",
+		cost = 6000,
+		color = Color3.fromRGB(110, 70, 255),
+		pets = {
+			{ name = "Alien", icon = "👽", rarity = "Rare", boost = 12, chance = 45 },
+			{ name = "Robot", icon = "🤖", rarity = "Epic", boost = 16, chance = 30 },
+			{ name = "Hydra", icon = "🐍", rarity = "Epic", boost = 24, chance = 16 },
+			{ name = "Void Dragon", icon = "🐉", rarity = "Legendary", boost = 40, chance = 7.5 },
+			{ name = "Cosmic Phoenix", icon = "☄️", rarity = "Legendary", boost = 75, chance = 1.4 },
+			{ name = "Infinity Cat", icon = "😼", rarity = "Mythic", boost = 250, chance = 0.1 },
+		},
+	},
+}
+
+-- Множник шансів для Legendary/Mythic від Lucky-ефектів.
+Config.LuckyRarities = { Legendary = true, Mythic = true }
+
+function Config.GetEgg(eggId: string)
+	for _, egg in Config.Eggs do
+		if egg.id == eggId then
+			return egg
+		end
+	end
+	return nil
+end
+
+function Config.GetPetDef(petName: string)
+	for _, egg in Config.Eggs do
+		for _, pet in egg.pets do
+			if pet.name == petName then
+				return pet
+			end
+		end
+	end
+	return nil
+end
+
+---------------------------------------------------------------------------
+-- Бусти (тимчасові)
+---------------------------------------------------------------------------
+Config.Boosts = {
+	Speed2x = { name = "2x Speed", mult = 2 },
+	Wins2x = { name = "2x Wins", mult = 2 },
+	Lucky = { name = "Lucky", mult = 2 },
+}
+
+---------------------------------------------------------------------------
+-- Монетизація
+---------------------------------------------------------------------------
+-- Ціни тут лише для відображення в магазині; реальну ціну ставиш у Creator Hub.
+Config.GamePasses = {
+	{ key = "VIP", id = 0, name = "VIP", price = 299, desc = "x1.5 Wins forever, VIP chat tag, golden name" },
+	{ key = "DoubleSpeed", id = 0, name = "2x Speed", price = 149, desc = "Double speed from every click, forever" },
+	{ key = "DoubleWins", id = 0, name = "2x Wins", price = 199, desc = "Double wins from every race, forever" },
+	{ key = "AutoClicker", id = 0, name = "Auto Clicker", price = 99, desc = "Clicks for you, even while AFK" },
+	{ key = "ExtraPets", id = 0, name = "+3 Pet Slots", price = 129, desc = "Equip 3 more pets at once" },
+	{ key = "LuckyEggs", id = 0, name = "Lucky Eggs", price = 249, desc = "x2 chance for Legendary & Mythic pets" },
+	{ key = "TripleHatch", id = 0, name = "Triple Hatch", price = 179, desc = "Open 3 eggs at once" },
+}
+
+-- kind: "Wins" — разовий пакет; amount множиться на (1 + rebirths), щоб пакет був цінний на будь-якому етапі.
+-- kind: "Boost" — тимчасовий буст; seconds додаються до вже активного.
+Config.Products = {
+	{ key = "WinsSmall", id = 0, name = "Pile of Wins", price = 25, kind = "Wins", amount = 150 },
+	{ key = "WinsMedium", id = 0, name = "Bag of Wins", price = 79, kind = "Wins", amount = 600, tag = "POPULAR" },
+	{ key = "WinsLarge", id = 0, name = "Vault of Wins", price = 249, kind = "Wins", amount = 2500, tag = "BEST VALUE" },
+	{ key = "BoostSpeed", id = 0, name = "2x Speed (15 min)", price = 39, kind = "Boost", boost = "Speed2x", seconds = 900 },
+	{ key = "BoostWins", id = 0, name = "2x Wins (15 min)", price = 49, kind = "Boost", boost = "Wins2x", seconds = 900 },
+	{ key = "BoostLucky", id = 0, name = "Lucky (15 min)", price = 59, kind = "Boost", boost = "Lucky", seconds = 900 },
+}
+
+function Config.GetPass(key: string)
+	for _, pass in Config.GamePasses do
+		if pass.key == key then
+			return pass
+		end
+	end
+	return nil
+end
+
+function Config.GetProduct(key: string)
+	for _, product in Config.Products do
+		if product.key == key then
+			return product
+		end
+	end
+	return nil
+end
+
+-- Як часто (в забігах) після фінішу показувати пропозицію 2x Wins тим, хто її не має.
+Config.UpsellEveryRaces = 6
+
+---------------------------------------------------------------------------
+-- Утримання
+---------------------------------------------------------------------------
+-- 7-денний цикл щоденних нагород. Серія скидається, якщо пропустити день.
+Config.DailyRewards = {
+	{ kind = "Wins", amount = 25 },
+	{ kind = "Wins", amount = 60 },
+	{ kind = "Boost", boost = "Speed2x", seconds = 900 },
+	{ kind = "Wins", amount = 150 },
+	{ kind = "Boost", boost = "Lucky", seconds = 900 },
+	{ kind = "Wins", amount = 400 },
+	{ kind = "Boost", boost = "Wins2x", seconds = 1800, bonusWins = 1000 },
+}
+
+-- Подарунки за час у грі (за сесію). time — секунди від входу.
+Config.PlaytimeGifts = {
+	{ time = 60, kind = "Wins", amount = 10 },
+	{ time = 180, kind = "Wins", amount = 25 },
+	{ time = 300, kind = "Boost", boost = "Speed2x", seconds = 300 },
+	{ time = 600, kind = "Wins", amount = 60 },
+	{ time = 900, kind = "Boost", boost = "Lucky", seconds = 600 },
+	{ time = 1500, kind = "Wins", amount = 150 },
+	{ time = 2400, kind = "Boost", boost = "Wins2x", seconds = 900 },
+	{ time = 3600, kind = "Wins", amount = 500 },
+}
+
+-- Промокоди (регістр не важливий). Додавай нові з кожним оновленням і пиши їх в описі гри.
+Config.Codes = {
+	RELEASE = { kind = "Wins", amount = 100 },
+	TURBO = { kind = "Boost", boost = "Speed2x", seconds = 600 },
+	LUCKY = { kind = "Boost", boost = "Lucky", seconds = 600 },
+}
+
+Config.FriendBonusPerFriend = 0.10 -- +10% виграшів за кожного друга на сервері
+Config.FriendBonusMax = 0.50
+Config.PremiumWinsBonus = 0.10
+
+return Config
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="4">
+        <Properties>
+          <string name="Name">Format</string>
+          <string name="Source"><![CDATA[--!nonstrict
+-- Форматування чисел і часу для UI.
+
+local Format = {}
+
+local SUFFIXES = { "", "K", "M", "B", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No", "Dc" }
+
+function Format.Number(n: number): string
+	if n ~= n then
+		return "0"
+	end
+	local negative = n < 0
+	n = math.abs(n)
+	if n < 1000 then
+		local s = if n == math.floor(n) then tostring(n) else string.format("%.1f", n)
+		return (if negative then "-" else "") .. s
+	end
+	local index = math.floor(math.log10(n) / 3)
+	if index >= #SUFFIXES then
+		return (if negative then "-" else "") .. string.format("%.2e", n)
+	end
+	local scaled = n / 10 ^ (index * 3)
+	local s = if scaled >= 100 then string.format("%d", math.floor(scaled)) else string.format("%.1f", math.floor(scaled * 10) / 10)
+	s = s:gsub("%.0$", "")
+	return (if negative then "-" else "") .. s .. SUFFIXES[index + 1]
+end
+
+function Format.Mult(n: number): string
+	if n >= 100 then
+		return "x" .. Format.Number(math.floor(n))
+	end
+	local s = string.format("%.2f", n):gsub("0+$", ""):gsub("%.$", "")
+	return "x" .. s
+end
+
+function Format.Time(seconds: number): string
+	seconds = math.max(0, math.floor(seconds))
+	local h = seconds // 3600
+	local m = (seconds % 3600) // 60
+	local s = seconds % 60
+	if h > 0 then
+		return string.format("%d:%02d:%02d", h, m, s)
+	end
+	return string.format("%d:%02d", m, s)
+end
+
+return Format
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="5">
+        <Properties>
+          <string name="Name">Net</string>
+          <string name="Source"><![CDATA[--!nonstrict
+-- Усі RemoteEvent/RemoteFunction створюються сервером тут і чекаються клієнтом.
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local EVENTS = {
+	"Click", -- C→S: клік
+	"State", -- S→C: повний стан гравця (дані + множники)
+	"RoundState", -- S→C: { phase, endsAt }
+	"RaceStart", -- S→C: { distance, duration, lane }
+	"RaceResult", -- S→C: { zone, wins, upsell }
+	"HatchResult", -- S→C: { eggId, pets = {...} }
+	"Notify", -- S→C: text, kind
+	"Action", -- C→S: name, args — меню, покупки, нагороди
+}
+
+local Net = {}
+
+local folder: Folder
+if RunService:IsServer() then
+	local existing = ReplicatedStorage:FindFirstChild("Remotes")
+	if existing then
+		folder = existing :: Folder
+	else
+		folder = Instance.new("Folder")
+		folder.Name = "Remotes"
+		folder.Parent = ReplicatedStorage
+	end
+	for _, name in EVENTS do
+		if not folder:FindFirstChild(name) then
+			local remote = Instance.new("RemoteEvent")
+			remote.Name = name
+			remote.Parent = folder
+		end
+	end
+else
+	folder = ReplicatedStorage:WaitForChild("Remotes") :: Folder
+end
+
+function Net.Get(name: string): RemoteEvent
+	return folder:WaitForChild(name) :: RemoteEvent
+end
+
+return Net
+]]></string>
+        </Properties>
+      </Item>
+    </Item>
+  </Item>
+  <Item class="ServerScriptService" referent="6">
+    <Properties>
+      <string name="Name">ServerScriptService</string>
+    </Properties>
+    <Item class="Script" referent="7">
+      <Properties>
+        <string name="Name">Server</string>
+        <token name="RunContext">0</token>
+        <string name="Source"><![CDATA[--!nonstrict
+-- Точка входу сервера: будує карту, запускає сервіси, маршрутизує дії клієнта.
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage.Shared.Config)
+local Format = require(ReplicatedStorage.Shared.Format)
+local Net = require(ReplicatedStorage.Shared.Net)
+
+local DataService = require(script.DataService)
+local LeaderboardService = require(script.LeaderboardService)
+local MapBuilder = require(script.MapBuilder)
+local PetService = require(script.PetService)
+local PlayerState = require(script.PlayerState)
+local RaceService = require(script.RaceService)
+local RewardService = require(script.RewardService)
+local ShopService = require(script.ShopService)
+
+local map = MapBuilder.Build()
+
+PlayerState.Start()
+ShopService.Start()
+PetService.Start(map.eggPrompts)
+RaceService.Start(map)
+LeaderboardService.Start(map.leaderboard)
+
+local function rebirth(player: Player)
+	local data = DataService.Get(player)
+	if not data then
+		return
+	end
+	local cost = Config.RebirthCost(data.rebirths)
+	if not PlayerState.SpendWins(player, data, cost, "Rebirth") then
+		PlayerState.Notify(player, string.format("Need %s 🏆 Wins to rebirth!", Format.Number(cost)), "warn")
+		return
+	end
+	data.speed = 0
+	data.rebirths += 1
+	PlayerState.LogFunnel(player, 5, "First Rebirth")
+	pcall(function()
+		game:GetService("AnalyticsService"):LogProgressionEvent(player, "Rebirth", Enum.AnalyticsProgressionType.Complete, data.rebirths)
+	end)
+	PlayerState.Notify(player, string.format("REBIRTH %d! Speed gain is now %s 🌟", data.rebirths, Format.Mult(1 + data.rebirths * Config.Rebirth.SpeedMultPerRebirth)), "success")
+	PlayerState.MarkDirty(player)
+end
+
+-- Маршрутизація дій. Усі аргументи від клієнта перевіряються.
+local actions: { [string]: (Player, any, any) -> () } = {
+	Rebirth = function(player)
+		rebirth(player)
+	end,
+	Equip = function(player, uid, equip)
+		if type(uid) == "string" and type(equip) == "boolean" then
+			PetService.Equip(player, uid, equip)
+		end
+	end,
+	EquipBest = function(player)
+		local data = DataService.Get(player)
+		if data then
+			PetService.EquipBest(player, data)
+		end
+	end,
+	Delete = function(player, uid)
+		if type(uid) == "string" then
+			PetService.Delete(player, uid)
+		end
+	end,
+	DeleteRarity = function(player, rarity)
+		if type(rarity) == "string" then
+			PetService.DeleteRarity(player, rarity)
+		end
+	end,
+	ClaimDaily = function(player)
+		RewardService.ClaimDaily(player)
+	end,
+	ClaimGift = function(player, index)
+		if type(index) == "number" then
+			RewardService.ClaimGift(player, index)
+		end
+	end,
+	Code = function(player, code)
+		if type(code) == "string" and #code <= 30 then
+			RewardService.RedeemCode(player, code)
+		end
+	end,
+	BuyPass = function(player, key)
+		if type(key) == "string" then
+			ShopService.PromptPass(player, key)
+		end
+	end,
+	BuyProduct = function(player, key)
+		if type(key) == "string" then
+			ShopService.PromptProduct(player, key)
+		end
+	end,
+	Setting = function(player, name, value)
+		local data = DataService.Get(player)
+		if data and (name == "autoEquip" or name == "autoClick") and type(value) == "boolean" then
+			data.settings[name] = value
+			PlayerState.MarkDirty(player)
+		end
+	end,
+}
+
+Net.Get("Action").OnServerEvent:Connect(function(player, name, a, b)
+	local handler = if type(name) == "string" then actions[name] else nil
+	if handler then
+		handler(player, a, b)
+	end
+end)
+
+Net.Get("Click").OnServerEvent:Connect(function(player, count)
+	if type(count) == "number" and count == count then
+		PlayerState.HandleClick(player, count)
+	end
+end)
+
+DataService.OnLoaded(function(player: Player, data: DataService.Data)
+	local session = PlayerState.CreateSession(player)
+	if data.races > 0 then
+		session.onboardingStep = math.huge -- воронку онбордингу логуємо лише для новачків
+	end
+	PlayerState.CreateLeaderstats(player)
+	PlayerState.LogFunnel(player, 1, "Joined")
+	ShopService.LoadPasses(player)
+	if data.settings.autoEquip then
+		PetService.EquipBest(player, data)
+	end
+	Net.Get("RoundState"):FireClient(player, RaceService.GetRoundState())
+
+	if Config.GROUP_ID ~= 0 then
+		task.spawn(function()
+			local ok, inGroup = pcall(player.IsInGroup, player, Config.GROUP_ID)
+			local session = PlayerState.GetSession(player)
+			if ok and inGroup and session then
+				session.inGroup = true
+				PlayerState.MarkDirty(player)
+			end
+		end)
+	end
+	task.spawn(PlayerState.RefreshFriends)
+end)
+
+Players.PlayerRemoving:Connect(function(player)
+	PlayerState.RemoveSession(player)
+	task.spawn(PlayerState.RefreshFriends)
+end)
+
+-- Сесію треба створити до запуску DataService, тому стартуємо його останнім.
+DataService.Start()
+
+-- Автоклікер (геймпас): працює на сервері, навіть якщо гравець AFK.
+task.spawn(function()
+	while true do
+		task.wait(1)
+		for _, player in Players:GetPlayers() do
+			local session = PlayerState.GetSession(player)
+			local data = DataService.Get(player)
+			if session and data and session.passes.AutoClicker and data.settings.autoClick then
+				PlayerState.HandleClick(player, Config.Click.AutoClicksPerSecond)
+			end
+		end
+	end
+end)
+]]></string>
+      </Properties>
+      <Item class="ModuleScript" referent="8">
+        <Properties>
+          <string name="Name">DataService</string>
+          <string name="Source"><![CDATA[--!nonstrict
+-- Завантаження/збереження даних гравця з блокуванням сесії,
+-- щоб прогрес не дублювався і не губився при переходах між серверами.
+
+local DataStoreService = game:GetService("DataStoreService")
+local HttpService = game:GetService("HttpService")
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
+
+local DataService = {}
+
+local SESSION_LOCK_TIMEOUT = 300 -- секунд; лок старішого сервера вважається мертвим
+local AUTOSAVE_INTERVAL = 60
+local MAX_RECEIPTS = 50
+
+local store: DataStore? = nil
+local ok, result = pcall(function()
+	return DataStoreService:GetDataStore(Config.DATASTORE_NAME)
+end)
+if ok then
+	store = result
+else
+	warn("[DataService] DataStore недоступний (увімкни API Services у Game Settings → Security):", result)
+end
+
+export type PetData = { uid: string, name: string, equipped: boolean }
+
+local function defaultData()
+	return {
+		version = 1,
+		speed = 0,
+		wins = 0,
+		totalWins = 0,
+		rebirths = 0,
+		bestZone = 0,
+		races = 0,
+		pets = {} :: { PetData },
+		eggsHatched = 0,
+		boosts = {} :: { [string]: number }, -- boostKey -> os.time() закінчення
+		daily = { streak = 0, lastDay = -1 },
+		codes = {} :: { [string]: boolean },
+		receipts = {} :: { string },
+		settings = { autoEquip = true, autoClick = true },
+		firstJoin = os.time(),
+		playTime = 0,
+	}
+end
+
+export type Data = typeof(defaultData())
+
+local profiles: { [Player]: Data } = {}
+local sessionStart: { [Player]: number } = {}
+-- Колбеки замість BindableEvent: Bindable копіює таблиці, а нам потрібне посилання на живі дані.
+local loadedCallbacks: { (Player, Data) -> () } = {}
+
+function DataService.OnLoaded(callback: (Player, Data) -> ())
+	table.insert(loadedCallbacks, callback)
+end
+
+local function reconcile(data: any, template: any)
+	for key, value in template do
+		if data[key] == nil then
+			data[key] = if type(value) == "table" then table.clone(value) else value
+		elseif type(value) == "table" and type(data[key]) == "table" and next(value) ~= nil then
+			reconcile(data[key], value)
+		end
+	end
+end
+
+local function keyFor(player: Player): string
+	return "u_" .. player.UserId
+end
+
+local function loadAsync(player: Player): Data?
+	if not store then
+		return defaultData()
+	end
+	local jobId = if RunService:IsStudio() then "studio" else game.JobId
+	for attempt = 1, 6 do
+		local lockedByOther = false
+		local success, value = pcall(function()
+			return (store :: DataStore):UpdateAsync(keyFor(player), function(old)
+				lockedByOther = false
+				old = old or { data = defaultData() }
+				local lock = old.lock
+				if lock and lock.jobId ~= jobId and os.time() - (lock.time or 0) < SESSION_LOCK_TIMEOUT and attempt < 6 then
+					lockedByOther = true
+					return nil -- не змінюємо, спробуємо ще раз
+				end
+				old.lock = { jobId = jobId, time = os.time() }
+				return old
+			end)
+		end)
+		if success and not lockedByOther and value then
+			local data = value.data or defaultData()
+			reconcile(data, defaultData())
+			return data
+		end
+		if not success then
+			warn("[DataService] Помилка завантаження", player.Name, value)
+			if RunService:IsStudio() then
+				-- У Studio без доступу до API граємо без збереження.
+				warn("[DataService] Studio: прогрес не зберігатиметься. Увімкни Enable Studio Access to API Services.")
+				store = nil
+				return defaultData()
+			end
+		end
+		if not player.Parent then
+			return nil
+		end
+		task.wait(if lockedByOther then 5 else 2 * attempt)
+	end
+	return nil
+end
+
+local function saveAsync(player: Player, release: boolean): boolean
+	local data = profiles[player]
+	if not data then
+		return false
+	end
+	if not store then
+		return true -- Studio без доступу до API: зберігати нікуди
+	end
+	local start = sessionStart[player]
+	if start then
+		data.playTime += os.time() - start
+		sessionStart[player] = os.time()
+	end
+	local jobId = if RunService:IsStudio() then "studio" else game.JobId
+	local success, err = pcall(function()
+		(store :: DataStore):UpdateAsync(keyFor(player), function(old)
+			old = old or {}
+			if old.lock and old.lock.jobId ~= jobId and os.time() - (old.lock.time or 0) < SESSION_LOCK_TIMEOUT then
+				-- Інший сервер уже забрав сесію — не перезаписуємо його свіжі дані.
+				return nil
+			end
+			old.data = data
+			old.lock = if release then nil else { jobId = jobId, time = os.time() }
+			return old
+		end)
+	end)
+	if not success then
+		warn("[DataService] Помилка збереження", player.Name, err)
+	end
+	return success
+end
+
+function DataService.Get(player: Player): Data?
+	return profiles[player]
+end
+
+function DataService.WaitFor(player: Player): Data?
+	while player.Parent and not profiles[player] do
+		task.wait(0.1)
+	end
+	return profiles[player]
+end
+
+function DataService.Save(player: Player): boolean
+	return saveAsync(player, false)
+end
+
+-- Ідемпотентність покупок: true, якщо цей receipt уже оброблено.
+function DataService.HasReceipt(data: Data, purchaseId: string): boolean
+	return table.find(data.receipts, purchaseId) ~= nil
+end
+
+function DataService.AddReceipt(data: Data, purchaseId: string)
+	table.insert(data.receipts, purchaseId)
+	while #data.receipts > MAX_RECEIPTS do
+		table.remove(data.receipts, 1)
+	end
+end
+
+function DataService.NewUid(): string
+	return HttpService:GenerateGUID(false)
+end
+
+local function onPlayerAdded(player: Player)
+	local data = loadAsync(player)
+	if not player.Parent then
+		if data then
+			-- Гравець вийшов під час завантаження — звільняємо лок сесії.
+			profiles[player] = data
+			saveAsync(player, true)
+			profiles[player] = nil
+		end
+		return
+	end
+	if not data then
+		player:Kick("Не вдалося завантажити твій прогрес. Перезайди, будь ласка.")
+		return
+	end
+	profiles[player] = data
+	sessionStart[player] = os.time()
+	for _, callback in loadedCallbacks do
+		task.spawn(callback, player, data)
+	end
+end
+
+local function onPlayerRemoving(player: Player)
+	if profiles[player] then
+		saveAsync(player, true)
+	end
+	profiles[player] = nil
+	sessionStart[player] = nil
+end
+
+function DataService.Start()
+	Players.PlayerAdded:Connect(onPlayerAdded)
+	Players.PlayerRemoving:Connect(onPlayerRemoving)
+	for _, player in Players:GetPlayers() do
+		task.spawn(onPlayerAdded, player)
+	end
+
+	task.spawn(function()
+		while true do
+			task.wait(AUTOSAVE_INTERVAL)
+			for player in profiles do
+				task.spawn(saveAsync, player, false)
+			end
+		end
+	end)
+
+	game:BindToClose(function()
+		local pending = 0
+		for player in profiles do
+			pending += 1
+			task.spawn(function()
+				saveAsync(player, true)
+				pending -= 1
+			end)
+		end
+		local deadline = os.clock() + 25
+		while pending > 0 and os.clock() < deadline do
+			task.wait(0.1)
+		end
+	end)
+end
+
+return DataService
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="9">
+        <Properties>
+          <string name="Name">LeaderboardService</string>
+          <string name="Source"><![CDATA[--!nonstrict
+-- Глобальний топ за загальною кількістю виграшів (OrderedDataStore) на дошці в лобі.
+
+local DataStoreService = game:GetService("DataStoreService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage.Shared.Config)
+local Format = require(ReplicatedStorage.Shared.Format)
+local DataService = require(script.Parent.DataService)
+
+local LeaderboardService = {}
+
+local UPDATE_INTERVAL = 120
+local TOP_COUNT = 15
+
+local nameCache: { [number]: string } = {}
+
+local function getName(userId: number): string
+	if nameCache[userId] then
+		return nameCache[userId]
+	end
+	local ok, name = pcall(Players.GetNameFromUserIdAsync, Players, userId)
+	local result = if ok and name then name else "Player"
+	nameCache[userId] = result
+	return result
+end
+
+local function render(gui: SurfaceGui, entries: { { key: string, value: number } })
+	local list = gui:FindFirstChild("List") :: Frame
+	for _, child in list:GetChildren() do
+		if child:IsA("TextLabel") then
+			child:Destroy()
+		end
+	end
+	for rank, entry in entries do
+		local userId = tonumber(string.sub(entry.key, 3)) or 0
+		local row = Instance.new("TextLabel")
+		row.LayoutOrder = rank
+		row.Size = UDim2.new(1, 0, 1 / TOP_COUNT, -2)
+		row.BackgroundColor3 = if rank == 1
+			then Color3.fromRGB(255, 200, 60)
+			elseif rank == 2 then Color3.fromRGB(200, 200, 215)
+			elseif rank == 3 then Color3.fromRGB(205, 130, 70)
+			else Color3.fromRGB(45, 45, 60)
+		row.BackgroundTransparency = 0.15
+		row.TextColor3 = Color3.new(1, 1, 1)
+		row.Font = Enum.Font.FredokaOne
+		row.TextScaled = true
+		row.TextXAlignment = Enum.TextXAlignment.Left
+		row.Text = string.format("  #%d  %s — %s 🏆", rank, getName(userId), Format.Number(entry.value))
+		row.Parent = list
+	end
+end
+
+function LeaderboardService.Start(gui: SurfaceGui)
+	local ok, store = pcall(DataStoreService.GetOrderedDataStore, DataStoreService, Config.LEADERBOARD_STORE)
+	if not ok then
+		warn("[Leaderboard] OrderedDataStore недоступний")
+		return
+	end
+	task.spawn(function()
+		while true do
+			for _, player in Players:GetPlayers() do
+				local data = DataService.Get(player)
+				if data and data.totalWins > 0 then
+					pcall(store.SetAsync, store, "u_" .. player.UserId, math.floor(data.totalWins))
+				end
+			end
+			local success, pages = pcall(store.GetSortedAsync, store, false, TOP_COUNT)
+			if success and pages then
+				render(gui, pages:GetCurrentPage())
+			end
+			task.wait(UPDATE_INTERVAL)
+		end
+	end)
+end
+
+return LeaderboardService
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="10">
+        <Properties>
+          <string name="Name">MapBuilder</string>
+          <string name="Source"><![CDATA[--!nonstrict
+-- Процедурно будує карту: лобі, трасу з 40 зонами, стенди з яйцями, дошку лідерів.
+-- Нічого не треба моделювати вручну, але можна замінити будь-яку частину своєю моделлю.
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage.Shared.Config)
+local Format = require(ReplicatedStorage.Shared.Format)
+
+local MapBuilder = {}
+
+local LOBBY_SIZE = 220
+local TRACK_START_X = LOBBY_SIZE / 2 + 20
+local GROUND_Y = 0
+
+local ZONE_COLORS = {
+	Color3.fromRGB(255, 90, 90),
+	Color3.fromRGB(255, 160, 60),
+	Color3.fromRGB(255, 220, 70),
+	Color3.fromRGB(110, 220, 90),
+	Color3.fromRGB(60, 200, 220),
+	Color3.fromRGB(80, 120, 255),
+	Color3.fromRGB(170, 90, 255),
+	Color3.fromRGB(255, 90, 200),
+}
+
+local function part(props: { [string]: any }): Part
+	local p = Instance.new("Part")
+	p.Anchored = true
+	p.TopSurface = Enum.SurfaceType.Smooth
+	p.BottomSurface = Enum.SurfaceType.Smooth
+	for key, value in props do
+		(p :: any)[key] = value
+	end
+	return p
+end
+
+local function label(parent: Instance, text: string, size: UDim2, offset: Vector3, color: Color3?, maxDistance: number?): BillboardGui
+	local gui = Instance.new("BillboardGui")
+	gui.Size = size
+	gui.StudsOffset = offset
+	gui.AlwaysOnTop = false
+	gui.MaxDistance = maxDistance or 250
+	gui.LightInfluence = 0
+	local text_ = Instance.new("TextLabel")
+	text_.Size = UDim2.fromScale(1, 1)
+	text_.BackgroundTransparency = 1
+	text_.Text = text
+	text_.TextScaled = true
+	text_.Font = Enum.Font.FredokaOne
+	text_.TextColor3 = color or Color3.new(1, 1, 1)
+	text_.RichText = true
+	local stroke = Instance.new("UIStroke")
+	stroke.Thickness = 2.5
+	stroke.Parent = text_
+	text_.Parent = gui
+	gui.Parent = parent
+	return gui
+end
+
+function MapBuilder.TrackStartX(): number
+	return TRACK_START_X
+end
+
+-- CFrame старту на доріжці lane (1..Lanes). Траса йде вздовж +X.
+function MapBuilder.LaneStart(lane: number): CFrame
+	local width = Config.Race.TrackWidth
+	local laneWidth = width / Config.Race.Lanes
+	local z = -width / 2 + laneWidth * (lane - 0.5)
+	return CFrame.lookAt(Vector3.new(TRACK_START_X, GROUND_Y + 4, z), Vector3.new(TRACK_START_X + 100, GROUND_Y + 4, z))
+end
+
+function MapBuilder.LobbySpawn(): CFrame
+	return CFrame.new(-30, GROUND_Y + 5, 0)
+end
+
+local function buildLobby(map: Folder): TextLabel
+	local lobby = Instance.new("Folder")
+	lobby.Name = "Lobby"
+	lobby.Parent = map
+
+	part({
+		Name = "Floor",
+		Size = Vector3.new(LOBBY_SIZE, 4, LOBBY_SIZE),
+		Position = Vector3.new(0, GROUND_Y - 2, 0),
+		Color = Color3.fromRGB(120, 200, 110),
+		Material = Enum.Material.Grass,
+		Parent = lobby,
+	})
+
+	local spawn = Instance.new("SpawnLocation")
+	spawn.Name = "Spawn"
+	spawn.Anchored = true
+	spawn.Size = Vector3.new(16, 1, 16)
+	spawn.CFrame = MapBuilder.LobbySpawn() - Vector3.new(0, 4.5, 0)
+	spawn.Color = Color3.fromRGB(255, 255, 255)
+	spawn.Material = Enum.Material.SmoothPlastic
+	spawn.Duration = 0
+	spawn.Neutral = true
+	spawn.Parent = lobby
+
+	-- Невидимі стіни лобі, щоб ніхто не випав.
+	local wallHeight = 40
+	for _, cfg in {
+		{ Vector3.new(0, 0, LOBBY_SIZE / 2), Vector3.new(LOBBY_SIZE, wallHeight, 2) },
+		{ Vector3.new(0, 0, -LOBBY_SIZE / 2), Vector3.new(LOBBY_SIZE, wallHeight, 2) },
+		{ Vector3.new(-LOBBY_SIZE / 2, 0, 0), Vector3.new(2, wallHeight, LOBBY_SIZE) },
+		-- Схід: стіна з проходом під ширину траси.
+		{ Vector3.new(LOBBY_SIZE / 2, 0, (LOBBY_SIZE + Config.Race.TrackWidth) / 4), Vector3.new(2, wallHeight, (LOBBY_SIZE - Config.Race.TrackWidth) / 2) },
+		{ Vector3.new(LOBBY_SIZE / 2, 0, -(LOBBY_SIZE + Config.Race.TrackWidth) / 4), Vector3.new(2, wallHeight, (LOBBY_SIZE - Config.Race.TrackWidth) / 2) },
+	} do
+		part({
+			Name = "Wall",
+			Size = cfg[2],
+			Position = cfg[1] + Vector3.new(0, GROUND_Y + wallHeight / 2, 0),
+			Transparency = 1,
+			Parent = lobby,
+		})
+	end
+
+	-- Декоративні дерева.
+	local rng = Random.new(42)
+	for _ = 1, 26 do
+		local x = rng:NextNumber(-LOBBY_SIZE / 2 + 10, LOBBY_SIZE / 2 - 10)
+		local z = rng:NextNumber(-LOBBY_SIZE / 2 + 10, LOBBY_SIZE / 2 - 10)
+		if math.abs(z) > 80 then
+			local height = rng:NextNumber(10, 18)
+			part({
+				Name = "Trunk",
+				Size = Vector3.new(2.5, height, 2.5),
+				Position = Vector3.new(x, GROUND_Y + height / 2, z),
+				Color = Color3.fromRGB(120, 80, 50),
+				Material = Enum.Material.Wood,
+				Parent = lobby,
+			})
+			part({
+				Name = "Leaves",
+				Shape = Enum.PartType.Ball,
+				Size = Vector3.one * rng:NextNumber(9, 13),
+				Position = Vector3.new(x, GROUND_Y + height + 3, z),
+				Color = Color3.fromRGB(60, rng:NextInteger(150, 190), 70),
+				Material = Enum.Material.Grass,
+				Parent = lobby,
+			})
+		end
+	end
+
+	-- Стартова арка.
+	local arch = Instance.new("Model")
+	arch.Name = "StartArch"
+	arch.Parent = lobby
+	local width = Config.Race.TrackWidth
+	for _, side in { -1, 1 } do
+		part({
+			Size = Vector3.new(4, 30, 4),
+			Position = Vector3.new(TRACK_START_X, GROUND_Y + 15, side * (width / 2 + 2)),
+			Color = Color3.fromRGB(30, 30, 40),
+			Parent = arch,
+		})
+	end
+	local top = part({
+		Name = "Top",
+		Size = Vector3.new(4, 6, width + 8),
+		Position = Vector3.new(TRACK_START_X, GROUND_Y + 32, 0),
+		Color = Color3.fromRGB(255, 70, 70),
+		Material = Enum.Material.Neon,
+		Parent = arch,
+	})
+	label(top, "🏁 START", UDim2.fromScale(40, 8), Vector3.new(0, 8, 0), nil, 600)
+
+	-- Табло раунду над спавном (текст оновлює RaceService).
+	local board = part({
+		Name = "RoundBoard",
+		Size = Vector3.new(1, 1, 1),
+		Position = Vector3.new(TRACK_START_X - 40, GROUND_Y + 30, 0),
+		Transparency = 1,
+		CanCollide = false,
+		Parent = lobby,
+	})
+	local roundGui = label(board, "", UDim2.fromScale(50, 10), Vector3.zero, nil, 500)
+	return roundGui:FindFirstChildOfClass("TextLabel") :: TextLabel
+end
+
+local function buildTrack(map: Folder)
+	local track = Instance.new("Folder")
+	track.Name = "Track"
+	track.Parent = map
+
+	local width = Config.Race.TrackWidth
+	local zoneLength = Config.Race.ZoneLength
+
+	-- Перехідний місток від лобі до траси.
+	part({
+		Name = "Bridge",
+		Size = Vector3.new(TRACK_START_X - LOBBY_SIZE / 2, 4, width),
+		Position = Vector3.new((TRACK_START_X + LOBBY_SIZE / 2) / 2, GROUND_Y - 2, 0),
+		Color = Color3.fromRGB(60, 60, 70),
+		Material = Enum.Material.Concrete,
+		Parent = track,
+	})
+
+	for zone = 0, Config.Race.ZoneCount do
+		local startX = TRACK_START_X + zone * zoneLength
+		local color = ZONE_COLORS[zone % #ZONE_COLORS + 1]
+		part({
+			Name = "Zone" .. zone,
+			Size = Vector3.new(zoneLength, 4, width),
+			Position = Vector3.new(startX + zoneLength / 2, GROUND_Y - 2, 0),
+			Color = color,
+			Material = Enum.Material.SmoothPlastic,
+			Parent = track,
+		})
+		for _, side in { -1, 1 } do
+			part({
+				Name = "Rail",
+				Size = Vector3.new(zoneLength, 6, 2),
+				Position = Vector3.new(startX + zoneLength / 2, GROUND_Y + 3, side * (width / 2 + 1)),
+				Color = color:Lerp(Color3.new(1, 1, 1), 0.5),
+				Material = Enum.Material.Neon,
+				Parent = track,
+			})
+		end
+		if zone >= 1 then
+			local gate = part({
+				Name = "Gate" .. zone,
+				Size = Vector3.new(1, 22, width),
+				Position = Vector3.new(startX, GROUND_Y + 11, 0),
+				Color = color,
+				Material = Enum.Material.ForceField,
+				Transparency = 0.4,
+				CanCollide = false,
+				CanQuery = false,
+				Parent = track,
+			})
+			local reward = Config.ZoneReward(zone)
+			label(
+				gate,
+				string.format('ZONE %d\n<font color="#50C8FF">%s ⚡</font>  <font color="#7CFF6B">+%s 🏆</font>', zone, Format.Number(math.ceil(Config.SpeedForZone(zone))), Format.Number(reward)),
+				UDim2.fromScale(26, 10),
+				Vector3.new(0, 16, 0),
+				nil,
+				900
+			)
+		end
+	end
+
+	-- Фінальна стіна.
+	local endX = TRACK_START_X + (Config.Race.ZoneCount + 1) * zoneLength
+	part({
+		Name = "EndWall",
+		Size = Vector3.new(4, 60, width + 4),
+		Position = Vector3.new(endX, GROUND_Y + 30, 0),
+		Color = Color3.fromRGB(255, 215, 60),
+		Material = Enum.Material.Neon,
+		Parent = track,
+	})
+end
+
+-- Стенди з яйцями з ProximityPrompt. Повертає { [eggId] = ProximityPrompt }.
+local function buildEggs(map: Folder): { [string]: { ProximityPrompt } }
+	local folder = Instance.new("Folder")
+	folder.Name = "Eggs"
+	folder.Parent = map
+
+	local prompts: { [string]: { ProximityPrompt } } = {}
+	for index, egg in Config.Eggs do
+		local x = -60 + (index - 1) * 45
+		local z = -60
+		local stand = Instance.new("Model")
+		stand.Name = egg.id
+		stand.Parent = folder
+
+		part({
+			Name = "Base",
+			Size = Vector3.new(16, 3, 16),
+			Position = Vector3.new(x, GROUND_Y + 1.5, z),
+			Color = Color3.fromRGB(60, 60, 75),
+			Material = Enum.Material.Slate,
+			Parent = stand,
+		})
+		local eggPart = part({
+			Name = "Egg",
+			Shape = Enum.PartType.Ball,
+			Size = Vector3.new(8, 10, 8),
+			Position = Vector3.new(x, GROUND_Y + 8, z),
+			Color = egg.color,
+			Material = Enum.Material.SmoothPlastic,
+			Parent = stand,
+		})
+		local mesh = Instance.new("SpecialMesh")
+		mesh.MeshType = Enum.MeshType.Sphere
+		mesh.Scale = Vector3.new(1, 1.25, 1)
+		mesh.Parent = eggPart
+		stand.PrimaryPart = eggPart
+
+		-- Шанси показуємо відкрито (правила Roblox для випадкових предметів).
+		local lines = { string.format('<b>%s</b>  <font color="#FFD34D">%s 🏆</font>', egg.name, Format.Number(egg.cost)) }
+		for _, pet in egg.pets do
+			local hex = Config.Rarities[pet.rarity].color:ToHex()
+			table.insert(lines, string.format('<font color="#%s">%s %s — %s%%</font>', hex, pet.name, Format.Mult(pet.boost), tostring(pet.chance)))
+		end
+		label(eggPart, table.concat(lines, "\n"), UDim2.fromScale(14, 3 + #egg.pets * 1.2), Vector3.new(0, 11 + #egg.pets * 0.6, 0), nil, 120)
+
+		prompts[egg.id] = {}
+		local function addPrompt(count: number, key: Enum.KeyCode, text: string)
+			local prompt = Instance.new("ProximityPrompt")
+			prompt.Name = "Hatch" .. count
+			prompt.ActionText = text
+			prompt.ObjectText = egg.name
+			prompt.KeyboardKeyCode = key
+			prompt.HoldDuration = 0
+			prompt.MaxActivationDistance = 14
+			prompt.RequiresLineOfSight = false
+			prompt:SetAttribute("Count", count)
+			prompt.Parent = eggPart
+			table.insert(prompts[egg.id], prompt)
+		end
+		addPrompt(1, Enum.KeyCode.E, "Open x1")
+		addPrompt(3, Enum.KeyCode.R, "Open x3 (Triple Hatch)")
+	end
+	return prompts
+end
+
+local function buildLeaderboard(map: Folder): SurfaceGui
+	local board = part({
+		Name = "Leaderboard",
+		Size = Vector3.new(1, 34, 26),
+		Position = Vector3.new(-LOBBY_SIZE / 2 + 6, GROUND_Y + 18, 30),
+		Color = Color3.fromRGB(25, 25, 35),
+		Parent = map,
+	})
+	local gui = Instance.new("SurfaceGui")
+	gui.Face = Enum.NormalId.Right
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	gui.PixelsPerStud = 20
+	gui.LightInfluence = 0
+	gui.Parent = board
+
+	local title = Instance.new("TextLabel")
+	title.Name = "Title"
+	title.Size = UDim2.new(1, 0, 0.1, 0)
+	title.BackgroundColor3 = Color3.fromRGB(255, 190, 40)
+	title.Text = "🏆 TOP WINS (ALL-TIME)"
+	title.TextScaled = true
+	title.Font = Enum.Font.FredokaOne
+	title.TextColor3 = Color3.new(1, 1, 1)
+	title.Parent = gui
+
+	local list = Instance.new("Frame")
+	list.Name = "List"
+	list.Size = UDim2.new(1, -20, 0.88, 0)
+	list.Position = UDim2.new(0, 10, 0.11, 0)
+	list.BackgroundTransparency = 1
+	list.Parent = gui
+	local layout = Instance.new("UIListLayout")
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.Padding = UDim.new(0, 2)
+	layout.Parent = list
+	return gui
+end
+
+export type Map = {
+	eggPrompts: { [string]: { ProximityPrompt } },
+	leaderboard: SurfaceGui,
+	roundLabel: TextLabel,
+}
+
+function MapBuilder.Build(): Map
+	local existing = workspace:FindFirstChild("Map")
+	if existing then
+		existing:Destroy()
+	end
+	local map = Instance.new("Folder")
+	map.Name = "Map"
+	local roundLabel = buildLobby(map)
+	buildTrack(map)
+	local eggPrompts = buildEggs(map)
+	local leaderboard = buildLeaderboard(map)
+	map.Parent = workspace
+
+	return {
+		eggPrompts = eggPrompts,
+		leaderboard = leaderboard,
+		roundLabel = roundLabel,
+	}
+end
+
+return MapBuilder
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="11">
+        <Properties>
+          <string name="Name">PetService</string>
+          <string name="Source"><![CDATA[--!nonstrict
+-- Яйця, улюбленці, екіпірування.
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage.Shared.Config)
+local Format = require(ReplicatedStorage.Shared.Format)
+local Net = require(ReplicatedStorage.Shared.Net)
+local DataService = require(script.Parent.DataService)
+local PlayerState = require(script.Parent.PlayerState)
+
+local HatchResultRemote = Net.Get("HatchResult")
+
+local PetService = {}
+
+local rng = Random.new()
+local lastHatch: { [Player]: number } = {}
+
+-- Зовнішній колбек для пропозиції геймпаса (встановлюється з ShopService, щоб уникнути циклічного require).
+PetService.PromptPass = function(_player: Player, _key: string) end
+
+local function boostOf(name: string): number
+	local def = Config.GetPetDef(name)
+	return if def then def.boost else 0
+end
+
+local function roll(egg: any, luck: number): string
+	local total = 0
+	local weights = {}
+	for i, pet in egg.pets do
+		local weight = pet.chance * (if Config.LuckyRarities[pet.rarity] then luck else 1)
+		weights[i] = weight
+		total += weight
+	end
+	local pick = rng:NextNumber(0, total)
+	for i, pet in egg.pets do
+		pick -= weights[i]
+		if pick <= 0 then
+			return pet.name
+		end
+	end
+	return egg.pets[#egg.pets].name
+end
+
+function PetService.EquipBest(player: Player, data: DataService.Data)
+	local sorted = table.clone(data.pets)
+	table.sort(sorted, function(a, b)
+		return boostOf(a.name) > boostOf(b.name)
+	end)
+	local slots = PlayerState.EquipSlots(player)
+	local best: { [string]: boolean } = {}
+	for i = 1, math.min(slots, #sorted) do
+		best[sorted[i].uid] = true
+	end
+	for _, pet in data.pets do
+		pet.equipped = best[pet.uid] == true
+	end
+	PlayerState.MarkDirty(player)
+end
+
+local function findPet(data: DataService.Data, uid: string)
+	for index, pet in data.pets do
+		if pet.uid == uid then
+			return pet, index
+		end
+	end
+	return nil, nil
+end
+
+local function equippedCount(data: DataService.Data): number
+	local count = 0
+	for _, pet in data.pets do
+		if pet.equipped then
+			count += 1
+		end
+	end
+	return count
+end
+
+function PetService.Hatch(player: Player, eggId: string, count: number)
+	local data = DataService.Get(player)
+	local session = PlayerState.GetSession(player)
+	local egg = Config.GetEgg(eggId)
+	if not data or not session or not egg then
+		return
+	end
+	local now = os.clock()
+	if lastHatch[player] and now - lastHatch[player] < 0.6 then
+		return
+	end
+	lastHatch[player] = now
+
+	count = if count == 3 then 3 else 1
+	if count == 3 and not session.passes.TripleHatch then
+		PetService.PromptPass(player, "TripleHatch")
+		return
+	end
+	if #data.pets + count > Config.Pets.InventoryLimit then
+		PlayerState.Notify(player, "Pet inventory is full! Delete some pets 🐾", "warn")
+		return
+	end
+	local cost = egg.cost * count
+	if not PlayerState.SpendWins(player, data, cost, "Egg", egg.id) then
+		PlayerState.Notify(player, string.format("Need %s 🏆 Wins — race further to earn more!", Format.Number(cost)), "warn")
+		return
+	end
+
+	local luck = PlayerState.Luck(player, data)
+	local hatched = {}
+	for _ = 1, count do
+		local name = roll(egg, luck)
+		table.insert(data.pets, { uid = DataService.NewUid(), name = name, equipped = false })
+		table.insert(hatched, name)
+	end
+	data.eggsHatched += count
+
+	if data.settings.autoEquip then
+		PetService.EquipBest(player, data)
+	end
+	PlayerState.MarkDirty(player)
+	PlayerState.LogFunnel(player, 4, "First Egg")
+	HatchResultRemote:FireClient(player, { eggId = egg.id, pets = hatched })
+end
+
+function PetService.Equip(player: Player, uid: string, equip: boolean)
+	local data = DataService.Get(player)
+	if not data then
+		return
+	end
+	local pet = findPet(data, uid)
+	if not pet then
+		return
+	end
+	if equip and not pet.equipped and equippedCount(data) >= PlayerState.EquipSlots(player) then
+		PlayerState.Notify(player, "All pet slots are full! Get +3 Pet Slots in the shop 🛒", "warn")
+		PetService.PromptPass(player, "ExtraPets")
+		return
+	end
+	pet.equipped = equip
+	PlayerState.MarkDirty(player)
+end
+
+function PetService.Delete(player: Player, uid: string)
+	local data = DataService.Get(player)
+	if not data then
+		return
+	end
+	local _, index = findPet(data, uid)
+	if index then
+		table.remove(data.pets, index)
+		PlayerState.MarkDirty(player)
+	end
+end
+
+-- Видаляє всі неекіпіровані улюбленці вказаної рідкості (швидке прибирання інвентарю).
+function PetService.DeleteRarity(player: Player, rarity: string)
+	local data = DataService.Get(player)
+	if not data or not Config.Rarities[rarity] then
+		return
+	end
+	local kept = {}
+	for _, pet in data.pets do
+		local def = Config.GetPetDef(pet.name)
+		if pet.equipped or not def or def.rarity ~= rarity then
+			table.insert(kept, pet)
+		end
+	end
+	data.pets = kept
+	PlayerState.MarkDirty(player)
+end
+
+function PetService.Start(eggPrompts: { [string]: { ProximityPrompt } })
+	for eggId, prompts in eggPrompts do
+		for _, prompt in prompts do
+			prompt.Triggered:Connect(function(player)
+				PetService.Hatch(player, eggId, prompt:GetAttribute("Count") :: number)
+			end)
+		end
+	end
+	game:GetService("Players").PlayerRemoving:Connect(function(player)
+		lastHatch[player] = nil
+	end)
+end
+
+return PetService
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="12">
+        <Properties>
+          <string name="Name">PlayerState</string>
+          <string name="Source"><![CDATA[--!nonstrict
+-- Стан гравця на сервері: множники, бусти, геймпаси, синхронізація з клієнтом, видача нагород.
+
+local AnalyticsService = game:GetService("AnalyticsService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage.Shared.Config)
+local Format = require(ReplicatedStorage.Shared.Format)
+local Net = require(ReplicatedStorage.Shared.Net)
+local DataService = require(script.Parent.DataService)
+
+local StateRemote = Net.Get("State")
+local NotifyRemote = Net.Get("Notify")
+
+export type Session = {
+	passes: { [string]: boolean },
+	inGroup: boolean,
+	friendsInServer: number,
+	joinTime: number,
+	giftsClaimed: { [number]: boolean },
+	clickSecond: number,
+	clicksThisSecond: number,
+	racesSinceUpsell: number,
+	dirty: boolean,
+	onboardingStep: number,
+}
+
+local PlayerState = {}
+
+local sessions: { [Player]: Session } = {}
+
+function PlayerState.CreateSession(player: Player): Session
+	local session: Session = {
+		passes = {},
+		inGroup = false,
+		friendsInServer = 0,
+		joinTime = os.time(),
+		giftsClaimed = {},
+		clickSecond = 0,
+		clicksThisSecond = 0,
+		racesSinceUpsell = 0,
+		dirty = true,
+		onboardingStep = 0,
+	}
+	sessions[player] = session
+	return session
+end
+
+function PlayerState.RemoveSession(player: Player)
+	sessions[player] = nil
+end
+
+function PlayerState.GetSession(player: Player): Session?
+	return sessions[player]
+end
+
+---------------------------------------------------------------------------
+-- Множники
+---------------------------------------------------------------------------
+function PlayerState.IsBoostActive(data: DataService.Data, key: string): boolean
+	local ends = data.boosts[key]
+	return ends ~= nil and ends > os.time()
+end
+
+function PlayerState.EquipSlots(player: Player): number
+	local session = sessions[player]
+	local extra = if session and session.passes.ExtraPets then Config.Pets.ExtraSlotsPass else 0
+	return Config.Pets.BaseEquipSlots + extra
+end
+
+function PlayerState.PetMultiplier(data: DataService.Data): number
+	local mult = 1
+	for _, pet in data.pets do
+		if pet.equipped then
+			local def = Config.GetPetDef(pet.name)
+			if def then
+				mult += def.boost - 1
+			end
+		end
+	end
+	return mult
+end
+
+function PlayerState.SpeedMultiplier(player: Player, data: DataService.Data): number
+	local session = sessions[player]
+	local mult = (1 + data.rebirths * Config.Rebirth.SpeedMultPerRebirth) * PlayerState.PetMultiplier(data)
+	if session then
+		if session.passes.DoubleSpeed then
+			mult *= 2
+		end
+		if session.inGroup then
+			mult *= 1 + Config.GROUP_SPEED_BONUS
+		end
+	end
+	if PlayerState.IsBoostActive(data, "Speed2x") then
+		mult *= Config.Boosts.Speed2x.mult
+	end
+	return mult
+end
+
+function PlayerState.WinsMultiplier(player: Player, data: DataService.Data): number
+	local session = sessions[player]
+	local mult = 1 + data.rebirths * Config.Rebirth.WinsMultPerRebirth
+	local bonus = 0
+	if session then
+		if session.passes.VIP then
+			mult *= 1.5
+		end
+		if session.passes.DoubleWins then
+			mult *= 2
+		end
+		bonus += math.min(session.friendsInServer * Config.FriendBonusPerFriend, Config.FriendBonusMax)
+	end
+	if player.MembershipType == Enum.MembershipType.Premium then
+		bonus += Config.PremiumWinsBonus
+	end
+	if PlayerState.IsBoostActive(data, "Wins2x") then
+		mult *= Config.Boosts.Wins2x.mult
+	end
+	return mult * (1 + bonus)
+end
+
+function PlayerState.Luck(player: Player, data: DataService.Data): number
+	local session = sessions[player]
+	local luck = 1
+	if session and session.passes.LuckyEggs then
+		luck *= 2
+	end
+	if PlayerState.IsBoostActive(data, "Lucky") then
+		luck *= Config.Boosts.Lucky.mult
+	end
+	return luck
+end
+
+---------------------------------------------------------------------------
+-- Синхронізація
+---------------------------------------------------------------------------
+function PlayerState.MarkDirty(player: Player)
+	local session = sessions[player]
+	if session then
+		session.dirty = true
+	end
+end
+
+local function updateLeaderstats(player: Player, data: DataService.Data)
+	local stats = player:FindFirstChild("leaderstats")
+	if not stats then
+		return
+	end
+	local speed = stats:FindFirstChild("Speed") :: NumberValue?
+	local wins = stats:FindFirstChild("Wins") :: NumberValue?
+	local rebirths = stats:FindFirstChild("Rebirths") :: NumberValue?
+	if speed then
+		speed.Value = math.floor(data.speed)
+	end
+	if wins then
+		wins.Value = math.floor(data.wins)
+	end
+	if rebirths then
+		rebirths.Value = data.rebirths
+	end
+end
+
+function PlayerState.CreateLeaderstats(player: Player)
+	local stats = Instance.new("Folder")
+	stats.Name = "leaderstats"
+	for _, name in { "Speed", "Wins", "Rebirths" } do
+		local value = Instance.new("NumberValue")
+		value.Name = name
+		value.Parent = stats
+	end
+	stats.Parent = player
+end
+
+function PlayerState.BuildPayload(player: Player, data: DataService.Data, session: Session)
+	local today = math.floor(os.time() / 86400)
+	-- Масив без «дір», бо таблиці з розрідженими числовими ключами погано передаються через Remote.
+	local gifts = {}
+	for index in Config.PlaytimeGifts do
+		gifts[index] = session.giftsClaimed[index] == true
+	end
+	-- День 7-денного циклу, який показується як поточний.
+	local cycle = #Config.DailyRewards
+	local dailyDay = if data.daily.lastDay == today
+		then (data.daily.streak - 1) % cycle + 1
+		elseif data.daily.lastDay == today - 1 then data.daily.streak % cycle + 1
+		else 1
+	return {
+		speed = data.speed,
+		wins = data.wins,
+		totalWins = data.totalWins,
+		rebirths = data.rebirths,
+		bestZone = data.bestZone,
+		races = data.races,
+		pets = data.pets,
+		boosts = data.boosts,
+		settings = data.settings,
+		codes = data.codes,
+		passes = session.passes,
+		inGroup = session.inGroup,
+		friendsInServer = session.friendsInServer,
+		joinTime = session.joinTime,
+		giftsClaimed = gifts,
+		dailyStreak = data.daily.streak,
+		dailyClaimedToday = data.daily.lastDay == today,
+		dailyDay = dailyDay,
+		speedMult = PlayerState.SpeedMultiplier(player, data),
+		winsMult = PlayerState.WinsMultiplier(player, data),
+		petMult = PlayerState.PetMultiplier(data),
+		luck = PlayerState.Luck(player, data),
+		equipSlots = PlayerState.EquipSlots(player),
+		rebirthCost = Config.RebirthCost(data.rebirths),
+	}
+end
+
+function PlayerState.Flush(player: Player)
+	local session = sessions[player]
+	local data = DataService.Get(player)
+	if not session or not data or not session.dirty then
+		return
+	end
+	session.dirty = false
+	updateLeaderstats(player, data)
+	-- Список екіпірованих улюбленців — щоб усі клієнти малювали їх біля гравця.
+	local equipped = {}
+	for _, pet in data.pets do
+		if pet.equipped then
+			table.insert(equipped, pet.name)
+		end
+	end
+	local equippedText = table.concat(equipped, ",")
+	if player:GetAttribute("EquippedPets") ~= equippedText then
+		player:SetAttribute("EquippedPets", equippedText)
+	end
+	StateRemote:FireClient(player, PlayerState.BuildPayload(player, data, session))
+end
+
+function PlayerState.Notify(player: Player, text: string, kind: string?)
+	NotifyRemote:FireClient(player, text, kind or "info")
+end
+
+---------------------------------------------------------------------------
+-- Економіка
+---------------------------------------------------------------------------
+function PlayerState.LogEconomy(player: Player, flow: Enum.AnalyticsEconomyFlowType, amount: number, balance: number, transaction: string, sku: string?)
+	pcall(function()
+		AnalyticsService:LogEconomyEvent(player, flow, "Wins", amount, balance, transaction, sku)
+	end)
+end
+
+function PlayerState.LogFunnel(player: Player, step: number, name: string)
+	local session = sessions[player]
+	if not session or session.onboardingStep >= step then
+		return
+	end
+	session.onboardingStep = step
+	pcall(function()
+		AnalyticsService:LogOnboardingFunnelStepEvent(player, step, name)
+	end)
+end
+
+function PlayerState.AddWins(player: Player, data: DataService.Data, amount: number, transaction: string, sku: string?)
+	amount = math.floor(amount)
+	if amount <= 0 then
+		return
+	end
+	data.wins += amount
+	PlayerState.LogEconomy(player, Enum.AnalyticsEconomyFlowType.Source, amount, data.wins, transaction, sku)
+	PlayerState.MarkDirty(player)
+end
+
+function PlayerState.SpendWins(player: Player, data: DataService.Data, amount: number, transaction: string, sku: string?): boolean
+	if data.wins < amount then
+		return false
+	end
+	data.wins -= amount
+	PlayerState.LogEconomy(player, Enum.AnalyticsEconomyFlowType.Sink, amount, data.wins, transaction, sku)
+	PlayerState.MarkDirty(player)
+	return true
+end
+
+function PlayerState.AddBoost(player: Player, data: DataService.Data, key: string, seconds: number)
+	local now = os.time()
+	local current = data.boosts[key]
+	local base = if current and current > now then current else now
+	data.boosts[key] = base + seconds
+	PlayerState.MarkDirty(player)
+end
+
+-- Видає нагороду з конфігу (щоденна, подарунок, промокод, продукт). Повертає текст для сповіщення.
+function PlayerState.GrantReward(player: Player, data: DataService.Data, reward: any, transaction: string): string
+	local parts = {}
+	if reward.kind == "Wins" then
+		local amount = math.floor(reward.amount * (1 + data.rebirths))
+		PlayerState.AddWins(player, data, amount, transaction)
+		table.insert(parts, "+" .. Format.Number(amount) .. " Wins")
+	elseif reward.kind == "Boost" then
+		PlayerState.AddBoost(player, data, reward.boost, reward.seconds)
+		table.insert(parts, Config.Boosts[reward.boost].name .. " " .. Format.Time(reward.seconds))
+	end
+	if reward.bonusWins then
+		local amount = math.floor(reward.bonusWins * (1 + data.rebirths))
+		PlayerState.AddWins(player, data, amount, transaction)
+		table.insert(parts, "+" .. Format.Number(amount) .. " Wins")
+	end
+	return table.concat(parts, " & ")
+end
+
+---------------------------------------------------------------------------
+-- Клік
+---------------------------------------------------------------------------
+function PlayerState.HandleClick(player: Player, count: number)
+	local session = sessions[player]
+	local data = DataService.Get(player)
+	if not session or not data then
+		return
+	end
+	local now = os.time()
+	if session.clickSecond ~= now then
+		session.clickSecond = now
+		session.clicksThisSecond = 0
+	end
+	local allowed = Config.Click.MaxClicksPerSecond - session.clicksThisSecond
+	count = math.clamp(math.floor(count), 0, math.max(allowed, 0))
+	if count <= 0 then
+		return
+	end
+	session.clicksThisSecond += count
+	data.speed += Config.Click.BaseGain * PlayerState.SpeedMultiplier(player, data) * count
+	PlayerState.MarkDirty(player)
+	if data.speed >= 1 then
+		PlayerState.LogFunnel(player, 2, "First Click")
+	end
+end
+
+---------------------------------------------------------------------------
+-- Соціальні бонуси
+---------------------------------------------------------------------------
+function PlayerState.RefreshFriends()
+	local players = Players:GetPlayers()
+	for _, player in players do
+		local session = sessions[player]
+		if session then
+			local count = 0
+			for _, other in players do
+				if other ~= player then
+					local ok, isFriend = pcall(player.IsFriendsWith, player, other.UserId)
+					if ok and isFriend then
+						count += 1
+					end
+				end
+			end
+			if session.friendsInServer ~= count then
+				session.friendsInServer = count
+				session.dirty = true
+			end
+		end
+	end
+end
+
+function PlayerState.Start()
+	task.spawn(function()
+		while true do
+			task.wait(0.2)
+			for player in sessions do
+				PlayerState.Flush(player)
+			end
+		end
+	end)
+	-- Бусти спливають — оновлюємо множники.
+	task.spawn(function()
+		while true do
+			task.wait(5)
+			for player in sessions do
+				PlayerState.MarkDirty(player)
+			end
+		end
+	end)
+end
+
+return PlayerState
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="13">
+        <Properties>
+          <string name="Name">RaceService</string>
+          <string name="Source"><![CDATA[--!nonstrict
+-- Цикл раундів: лобі (клікаєш, набираєш швидкість) → забіг (всі біжать, сервер рахує зони й виграші).
+-- Виграші рахуються на сервері лише зі збереженої швидкості — позиція клієнта ні на що не впливає.
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage.Shared.Config)
+local Format = require(ReplicatedStorage.Shared.Format)
+local Net = require(ReplicatedStorage.Shared.Net)
+local DataService = require(script.Parent.DataService)
+local MapBuilder = require(script.Parent.MapBuilder)
+local PlayerState = require(script.Parent.PlayerState)
+
+local RoundStateRemote = Net.Get("RoundState")
+local RaceStartRemote = Net.Get("RaceStart")
+local RaceResultRemote = Net.Get("RaceResult")
+
+local RaceService = {}
+
+local phase = "Lobby"
+local endsAt = 0
+local roundLabel: TextLabel? = nil
+local racers: { [Player]: boolean } = {}
+
+function RaceService.GetRoundState()
+	return { phase = phase, endsAt = endsAt }
+end
+
+local function broadcast()
+	RoundStateRemote:FireAllClients(RaceService.GetRoundState())
+end
+
+local function getRoot(player: Player): BasePart?
+	local character = player.Character
+	if not character then
+		return nil
+	end
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	if not humanoid or humanoid.Health <= 0 then
+		return nil
+	end
+	return character:FindFirstChild("HumanoidRootPart") :: BasePart?
+end
+
+local function finishRace(player: Player, zone: number, distance: number)
+	local data = DataService.Get(player)
+	local session = PlayerState.GetSession(player)
+	if not data or not session then
+		return
+	end
+	local wins = 0
+	if zone >= 1 then
+		wins = math.floor(Config.WinsForZone(zone) * PlayerState.WinsMultiplier(player, data))
+		data.totalWins += wins
+		PlayerState.AddWins(player, data, wins, "Race")
+	end
+	data.races += 1
+	local newBest = zone > data.bestZone
+	if newBest then
+		data.bestZone = zone
+	end
+	PlayerState.LogFunnel(player, 3, "First Race")
+
+	session.racesSinceUpsell += 1
+	local upsell: string? = nil
+	if zone >= 1 and session.racesSinceUpsell >= Config.UpsellEveryRaces then
+		if not session.passes.DoubleWins then
+			upsell = "DoubleWins"
+		elseif not session.passes.DoubleSpeed then
+			upsell = "DoubleSpeed"
+		end
+		session.racesSinceUpsell = 0
+	end
+
+	PlayerState.MarkDirty(player)
+	RaceResultRemote:FireClient(player, {
+		zone = zone,
+		wins = wins,
+		distance = distance,
+		newBest = newBest and zone >= 1,
+		upsell = upsell,
+	})
+end
+
+local function startRace()
+	phase = "Race"
+	endsAt = workspace:GetServerTimeNow() + Config.Race.RaceTime
+	broadcast()
+
+	table.clear(racers)
+	local lane = 0
+	for _, player in Players:GetPlayers() do
+		local data = DataService.Get(player)
+		local root = getRoot(player)
+		if data and root and player.Character then
+			local distance = Config.DistanceForSpeed(data.speed)
+			local zone = Config.ZoneForDistance(distance)
+			if distance < 5 then
+				PlayerState.Notify(player, "Click to gain Speed before the next race! ⚡", "warn")
+			else
+				lane = lane % Config.Race.Lanes + 1
+				local start = MapBuilder.LaneStart(lane)
+				local velocity = math.max(Config.Race.MinRunVelocity, distance / (Config.Race.RaceTime - 2))
+				local duration = distance / velocity
+				racers[player] = true
+				player.Character:PivotTo(start)
+				RaceStartRemote:FireClient(player, {
+					start = start,
+					distance = distance,
+					duration = duration,
+				})
+				task.delay(duration, finishRace, player, zone, distance)
+			end
+		end
+	end
+end
+
+local function endRace()
+	for player in racers do
+		local root = getRoot(player)
+		if root and player.Character and player.Parent then
+			local offset = Vector3.new(math.random(-12, 12), 0, math.random(-12, 12))
+			player.Character:PivotTo(MapBuilder.LobbySpawn() + offset)
+		end
+	end
+	table.clear(racers)
+	phase = "Lobby"
+	endsAt = workspace:GetServerTimeNow() + Config.Race.LobbyTime
+	broadcast()
+end
+
+function RaceService.IsRacing(player: Player): boolean
+	return racers[player] == true
+end
+
+function RaceService.Start(map: MapBuilder.Map)
+	roundLabel = map.roundLabel
+	Players.PlayerRemoving:Connect(function(player)
+		racers[player] = nil
+	end)
+
+	phase = "Lobby"
+	endsAt = workspace:GetServerTimeNow() + Config.Race.LobbyTime
+	broadcast()
+
+	task.spawn(function()
+		while true do
+			local remaining = endsAt - workspace:GetServerTimeNow()
+			if roundLabel then
+				roundLabel.Text = if phase == "Lobby"
+					then string.format("🏁 Next race in %s", Format.Time(math.ceil(remaining)))
+					else "🔥 RACE IN PROGRESS!"
+			end
+			if remaining <= 0 then
+				if phase == "Lobby" then
+					startRace()
+				else
+					endRace()
+				end
+			end
+			task.wait(0.25)
+		end
+	end)
+end
+
+return RaceService
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="14">
+        <Properties>
+          <string name="Name">RewardService</string>
+          <string name="Source"><![CDATA[--!nonstrict
+-- Щоденні нагороди, подарунки за час у грі та промокоди.
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage.Shared.Config)
+local DataService = require(script.Parent.DataService)
+local PlayerState = require(script.Parent.PlayerState)
+
+local RewardService = {}
+
+local function today(): number
+	return math.floor(os.time() / 86400)
+end
+
+function RewardService.ClaimDaily(player: Player)
+	local data = DataService.Get(player)
+	if not data then
+		return
+	end
+	local day = today()
+	if data.daily.lastDay == day then
+		PlayerState.Notify(player, "Come back tomorrow for the next reward! 📅", "warn")
+		return
+	end
+	if data.daily.lastDay == day - 1 then
+		data.daily.streak += 1
+	else
+		data.daily.streak = 1
+	end
+	data.daily.lastDay = day
+	local index = (data.daily.streak - 1) % #Config.DailyRewards + 1
+	local text = PlayerState.GrantReward(player, data, Config.DailyRewards[index], "Daily")
+	PlayerState.Notify(player, string.format("Day %d reward: %s 🎁", data.daily.streak, text), "success")
+	PlayerState.MarkDirty(player)
+end
+
+function RewardService.ClaimGift(player: Player, index: number)
+	local data = DataService.Get(player)
+	local session = PlayerState.GetSession(player)
+	local gift = Config.PlaytimeGifts[index]
+	if not data or not session or not gift or session.giftsClaimed[index] then
+		return
+	end
+	if os.time() - session.joinTime < gift.time then
+		return
+	end
+	session.giftsClaimed[index] = true
+	local text = PlayerState.GrantReward(player, data, gift, "PlaytimeGift")
+	PlayerState.Notify(player, "Gift: " .. text .. " 🎁", "success")
+	PlayerState.MarkDirty(player)
+end
+
+function RewardService.RedeemCode(player: Player, code: string)
+	local data = DataService.Get(player)
+	if not data or type(code) ~= "string" then
+		return
+	end
+	code = string.upper((string.gsub(code, "%s", "")))
+	local reward = Config.Codes[code]
+	if not reward then
+		PlayerState.Notify(player, "Invalid code ❌", "error")
+		return
+	end
+	if data.codes[code] then
+		PlayerState.Notify(player, "You already used this code!", "warn")
+		return
+	end
+	data.codes[code] = true
+	local text = PlayerState.GrantReward(player, data, reward, "Code")
+	PlayerState.Notify(player, "Code redeemed: " .. text .. " ✅", "success")
+	PlayerState.MarkDirty(player)
+end
+
+return RewardService
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="15">
+        <Properties>
+          <string name="Name">ShopService</string>
+          <string name="Source"><![CDATA[--!nonstrict
+-- Геймпаси й Developer Products. Покупки обробляються ідемпотентно через ProcessReceipt.
+
+local MarketplaceService = game:GetService("MarketplaceService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local Config = require(ReplicatedStorage.Shared.Config)
+local Format = require(ReplicatedStorage.Shared.Format)
+local DataService = require(script.Parent.DataService)
+local PlayerState = require(script.Parent.PlayerState)
+local PetService = require(script.Parent.PetService)
+
+local ShopService = {}
+
+local function canTestPurchase(): boolean
+	return RunService:IsStudio() and Config.TEST_PURCHASES_IN_STUDIO
+end
+
+local function applyPass(player: Player, key: string)
+	local session = PlayerState.GetSession(player)
+	local data = DataService.Get(player)
+	if not session or session.passes[key] then
+		return
+	end
+	session.passes[key] = true
+	if key == "VIP" then
+		player:SetAttribute("VIP", true)
+	elseif key == "ExtraPets" and data and data.settings.autoEquip then
+		PetService.EquipBest(player, data)
+	end
+	PlayerState.MarkDirty(player)
+end
+
+function ShopService.LoadPasses(player: Player)
+	for _, pass in Config.GamePasses do
+		if pass.id ~= 0 then
+			task.spawn(function()
+				local ok, owns = pcall(MarketplaceService.UserOwnsGamePassAsync, MarketplaceService, player.UserId, pass.id)
+				if ok and owns and player.Parent then
+					applyPass(player, pass.key)
+				end
+			end)
+		end
+	end
+end
+
+function ShopService.PromptPass(player: Player, key: string)
+	local pass = Config.GetPass(key)
+	local session = PlayerState.GetSession(player)
+	if not pass or not session or session.passes[key] then
+		return
+	end
+	if pass.id == 0 then
+		if canTestPurchase() then
+			applyPass(player, key)
+			PlayerState.Notify(player, "[Studio test] Unlocked " .. pass.name .. "!", "success")
+		else
+			PlayerState.Notify(player, pass.name .. " is coming soon!", "info")
+		end
+		return
+	end
+	MarketplaceService:PromptGamePassPurchase(player, pass.id)
+end
+
+local function grantProduct(player: Player, data: DataService.Data, product: any)
+	if product.kind == "Wins" then
+		local amount = math.floor(product.amount * (1 + data.rebirths))
+		PlayerState.AddWins(player, data, amount, "Purchase", product.key)
+		PlayerState.Notify(player, string.format("Thanks for your support! +%s 🏆 Wins", Format.Number(amount)), "success")
+	elseif product.kind == "Boost" then
+		PlayerState.AddBoost(player, data, product.boost, product.seconds)
+		PlayerState.Notify(player, string.format("%s activated for %s! 🚀", Config.Boosts[product.boost].name, Format.Time(product.seconds)), "success")
+	end
+end
+
+function ShopService.PromptProduct(player: Player, key: string)
+	local product = Config.GetProduct(key)
+	if not product then
+		return
+	end
+	if product.id == 0 then
+		local data = DataService.Get(player)
+		if canTestPurchase() and data then
+			grantProduct(player, data, product)
+		else
+			PlayerState.Notify(player, product.name .. " is coming soon!", "info")
+		end
+		return
+	end
+	MarketplaceService:PromptProductPurchase(player, product.id)
+end
+
+local function processReceipt(receipt): Enum.ProductPurchaseDecision
+	local player = Players:GetPlayerByUserId(receipt.PlayerId)
+	if not player then
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	local data = DataService.Get(player)
+	if not data then
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	local purchaseId = tostring(receipt.PurchaseId)
+	if not DataService.HasReceipt(data, purchaseId) then
+		local product = nil
+		for _, p in Config.Products do
+			if p.id ~= 0 and p.id == receipt.ProductId then
+				product = p
+			end
+		end
+		if not product then
+			warn("[ShopService] Невідомий продукт", receipt.ProductId)
+			return Enum.ProductPurchaseDecision.NotProcessedYet
+		end
+		grantProduct(player, data, product)
+		DataService.AddReceipt(data, purchaseId)
+	end
+	-- Зберігаємо одразу: якщо збереження не вдалося, Roblox повторить виклик,
+	-- а receipt уже в пам'яті, тож товар не видасться двічі.
+	if not DataService.Save(player) then
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	return Enum.ProductPurchaseDecision.PurchaseGranted
+end
+
+function ShopService.Start()
+	PetService.PromptPass = ShopService.PromptPass
+	MarketplaceService.ProcessReceipt = processReceipt
+	MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player, passId, purchased)
+		if not purchased then
+			return
+		end
+		for _, pass in Config.GamePasses do
+			if pass.id == passId then
+				applyPass(player, pass.key)
+				PlayerState.Notify(player, "Thank you! " .. pass.name .. " unlocked! 💎", "success")
+			end
+		end
+	end)
+end
+
+return ShopService
+]]></string>
+        </Properties>
+      </Item>
+    </Item>
+  </Item>
+  <Item class="SoundService" referent="16">
+    <Properties>
+      <string name="Name">SoundService</string>
+      <bool name="RespectFilteringEnabled">true</bool>
+    </Properties>
+  </Item>
+  <Item class="StarterPlayer" referent="17">
+    <Properties>
+      <string name="Name">StarterPlayer</string>
+    </Properties>
+    <Item class="StarterPlayerScripts" referent="18">
+      <Properties>
+        <string name="Name">StarterPlayerScripts</string>
+      </Properties>
+      <Item class="LocalScript" referent="19">
+        <Properties>
+          <string name="Name">Client</string>
+          <string name="Source"><![CDATA[--!nonstrict
+-- Точка входу клієнта: UI, клікання, реакція на події сервера.
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local SocialService = game:GetService("SocialService")
+local TextChatService = game:GetService("TextChatService")
+local UserInputService = game:GetService("UserInputService")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local Format = require(Shared:WaitForChild("Format"))
+local Net = require(Shared:WaitForChild("Net"))
+
+local Effects = require(script.Effects)
+local Hud = require(script.Hud)
+local Panels = require(script.Panels)
+local PetsVisual = require(script.PetsVisual)
+local Race = require(script.Race)
+local Store = require(script.Store)
+
+local player = Players.LocalPlayer
+
+local ActionRemote = Net.Get("Action")
+local ClickRemote = Net.Get("Click")
+
+local function sendAction(name: string, a: any?, b: any?)
+	ActionRemote:FireServer(name, a, b)
+end
+
+---------------------------------------------------------------------------
+-- UI
+---------------------------------------------------------------------------
+local gui = Instance.new("ScreenGui")
+gui.Name = "TurboRaceUI"
+gui.ResetOnSpawn = false
+gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+gui.Parent = player:WaitForChild("PlayerGui")
+
+-- Інтерфейс намальовано під 1280x720 і масштабується під будь-який екран (телефони — більшість гравців).
+local uiScale = Instance.new("UIScale")
+uiScale.Parent = gui
+local function updateScale()
+	local viewport = workspace.CurrentCamera.ViewportSize
+	uiScale.Scale = math.clamp(math.min(viewport.X / 1280, viewport.Y / 720), 0.5, 1.2)
+end
+workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(updateScale)
+updateScale()
+
+local function openPanel(name: string)
+	if name == "Invite" then
+		local ok, canInvite = pcall(SocialService.CanSendGameInviteAsync, SocialService, player)
+		if ok and canInvite then
+			pcall(SocialService.PromptGameInvite, SocialService, player)
+		else
+			Hud.Notify("Invites are not available right now", "warn")
+		end
+		return
+	end
+	Panels.Open(name)
+end
+
+---------------------------------------------------------------------------
+-- Клікання
+---------------------------------------------------------------------------
+local unsentClicks = 0
+local clickTimes: { number } = {}
+
+local function doClick(position: Vector2?)
+	local state = Store.state
+	if not state then
+		return
+	end
+	-- Локальний ліміт, щоб не надсилати зайве (сервер теж перевіряє).
+	local now = os.clock()
+	while clickTimes[1] and now - clickTimes[1] > 1 do
+		table.remove(clickTimes, 1)
+	end
+	if #clickTimes >= Config.Click.MaxClicksPerSecond then
+		return
+	end
+	table.insert(clickTimes, now)
+
+	unsentClicks += 1
+	Store.pendingClicks += 1
+	Hud.PulseClick()
+	local gain = Config.Click.BaseGain * state.speedMult
+	local camera = workspace.CurrentCamera
+	local at = position or Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y - 140)
+	-- Позиції вводу в пікселях екрана, а UI масштабований — переводимо.
+	Effects.ClickPopup(at / uiScale.Scale, "+" .. Format.Number(math.floor(gain)) .. " ⚡")
+	if #clickTimes % 3 == 1 then
+		Effects.Play("Click", 0.25)
+	end
+end
+
+Hud.Build(gui, openPanel, function()
+	doClick(nil)
+end, sendAction)
+Panels.Build(gui, sendAction)
+Effects.Init(gui)
+PetsVisual.Start()
+Race.Init()
+
+-- Клік будь-де по екрану (як у топових клікерах) — без кнопки теж працює.
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed then
+		return
+	end
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		doClick(Vector2.new(input.Position.X, input.Position.Y))
+	end
+end)
+
+-- Кліки пачками раз на 0.1 с — менше трафіку.
+task.spawn(function()
+	while true do
+		task.wait(0.1)
+		if unsentClicks > 0 then
+			ClickRemote:FireServer(unsentClicks)
+			unsentClicks = 0
+		end
+	end
+end)
+
+---------------------------------------------------------------------------
+-- Події сервера
+---------------------------------------------------------------------------
+Net.Get("State").OnClientEvent:Connect(function(state)
+	Store.pendingClicks = unsentClicks
+	Store.Set(state)
+end)
+
+Net.Get("RoundState").OnClientEvent:Connect(function(round)
+	local previous = Store.round.phase
+	Store.round = round
+	if round.phase == "Lobby" and previous == "Race" then
+		Race.Stop()
+	elseif round.phase == "Race" and previous == "Lobby" then
+		Effects.Banner("🏁 GO! GO! GO!", Color3.fromRGB(255, 150, 50), 1)
+	end
+end)
+
+Net.Get("RaceStart").OnClientEvent:Connect(function(info)
+	Race.Start(info, Effects.ZonePopup)
+end)
+
+Net.Get("RaceResult").OnClientEvent:Connect(function(result)
+	Effects.RaceResult(result, function(passKey)
+		sendAction("BuyPass", passKey)
+	end)
+end)
+
+Net.Get("HatchResult").OnClientEvent:Connect(function(result)
+	Panels.Close()
+	Effects.Hatch(result)
+end)
+
+Net.Get("Notify").OnClientEvent:Connect(function(text, kind)
+	Hud.Notify(text, kind)
+end)
+
+---------------------------------------------------------------------------
+-- VIP-тег у чаті
+---------------------------------------------------------------------------
+TextChatService.OnIncomingMessage = function(message: TextChatMessage)
+	local properties = Instance.new("TextChatMessageProperties")
+	local source = message.TextSource
+	if source then
+		local speaker = Players:GetPlayerByUserId(source.UserId)
+		if speaker and speaker:GetAttribute("VIP") then
+			properties.PrefixText = "<font color=\"#FFD34D\">[VIP]</font> " .. message.PrefixText
+		end
+	end
+	return properties
+end
+]]></string>
+        </Properties>
+        <Item class="ModuleScript" referent="20">
+          <Properties>
+            <string name="Name">Effects</string>
+            <string name="Source"><![CDATA[--!nonstrict
+-- Візуальні ефекти й «соковитість»: спливаючі числа, вилуплення яєць, зони, результат забігу.
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local SoundService = game:GetService("SoundService")
+
+local Config = require(ReplicatedStorage.Shared.Config)
+local Format = require(ReplicatedStorage.Shared.Format)
+local UI = require(script.Parent.UI)
+
+local Effects = {}
+
+-- Заміни на власні звуки з Creator Store (rbxassetid://...), якщо хочеш.
+local SOUNDS = {
+	Click = "rbxasset://sounds/clickfast.wav",
+	Reward = "rbxasset://sounds/electronicpingshort.wav",
+}
+
+local gui: ScreenGui
+local hatchQueue: { any } = {}
+local hatching = false
+
+function Effects.Init(screenGui: ScreenGui)
+	gui = screenGui
+end
+
+function Effects.Play(name: string, volume: number?)
+	local id = SOUNDS[name]
+	if not id then
+		return
+	end
+	local sound = Instance.new("Sound")
+	sound.SoundId = id
+	sound.Volume = volume or 0.5
+	sound.Parent = SoundService
+	sound:Play()
+	sound.Ended:Once(function()
+		sound:Destroy()
+	end)
+	task.delay(5, function()
+		if sound.Parent then
+			sound:Destroy()
+		end
+	end)
+end
+
+-- "+N ⚡" там, де клікнули.
+function Effects.ClickPopup(position: Vector2, text: string)
+	local label = UI.label({
+		Size = UDim2.fromOffset(160, 34),
+		Position = UDim2.fromOffset(position.X - 80 + math.random(-30, 30), position.Y - 40),
+		Text = text,
+		TextColor3 = UI.Colors.Speed,
+		ZIndex = 20,
+		Parent = gui,
+	})
+	UI.tween(label, 0.7, { Position = label.Position - UDim2.fromOffset(0, 70), TextTransparency = 1 })
+	task.delay(0.7, function()
+		label:Destroy()
+	end)
+end
+
+-- Великий напис посеред екрана.
+function Effects.Banner(text: string, color: Color3?, duration: number?)
+	local label = UI.label({
+		Size = UDim2.fromOffset(600, 70),
+		Position = UDim2.new(0.5, -300, 0.32, 0),
+		Text = text,
+		TextColor3 = color or UI.Colors.Wins,
+		ZIndex = 20,
+		Parent = gui,
+	})
+	local scale = UI.new("UIScale", { Scale = 0.3, Parent = label })
+	UI.tween(scale, 0.3, { Scale = 1 }, Enum.EasingStyle.Back)
+	task.delay(duration or 1.2, function()
+		UI.tween(label, 0.3, { TextTransparency = 1 })
+		task.wait(0.3)
+		label:Destroy()
+	end)
+end
+
+function Effects.ZonePopup(zone: number)
+	Effects.Banner(string.format("ZONE %d  +%s 🏆", zone, Format.Number(Config.ZoneReward(zone))), UI.Colors.Wins, 0.8)
+	Effects.Play("Reward", 0.3)
+end
+
+function Effects.RaceResult(result: any, onUpsell: (string) -> ())
+	if result.zone < 1 then
+		Effects.Banner("Click more to reach Zone 1! ⚡", UI.Colors.Speed, 2)
+		return
+	end
+	local card = UI.new("Frame", {
+		Size = UDim2.fromOffset(380, if result.upsell then 210 else 140),
+		Position = UDim2.new(0.5, -190, 0.5, -60),
+		BackgroundColor3 = UI.Colors.Panel,
+		ZIndex = 30,
+		Parent = gui,
+	})
+	UI.corner(18).Parent = card
+	UI.stroke(UI.Colors.Wins, 4).Parent = card
+	UI.label({
+		Size = UDim2.new(1, -20, 0, 44),
+		Position = UDim2.fromOffset(10, 10),
+		Text = if result.newBest then "🏅 NEW BEST: ZONE " .. result.zone .. "!" else "🏁 REACHED ZONE " .. result.zone,
+		ZIndex = 31,
+		Parent = card,
+	})
+	UI.label({
+		Size = UDim2.new(1, -20, 0, 54),
+		Position = UDim2.fromOffset(10, 60),
+		Text = "+" .. Format.Number(result.wins) .. " 🏆",
+		TextColor3 = UI.Colors.Wins,
+		ZIndex = 31,
+		Parent = card,
+	})
+	if result.upsell then
+		local pass = Config.GetPass(result.upsell)
+		if pass then
+			UI.button({
+				Size = UDim2.new(1, -40, 0, 56),
+				Position = UDim2.fromOffset(20, 130),
+				Text = string.format("🔥 Get %s forever — R$ %d", pass.name, pass.price),
+				BackgroundColor3 = UI.Colors.Robux,
+				ZIndex = 31,
+				Parent = card,
+			}, function()
+				onUpsell(pass.key)
+				card:Destroy()
+			end)
+		end
+	end
+	local scale = UI.new("UIScale", { Scale = 0.5, Parent = card })
+	UI.tween(scale, 0.3, { Scale = 1 }, Enum.EasingStyle.Back)
+	Effects.Play("Reward", 0.6)
+	task.delay(if result.upsell then 6 else 2.5, function()
+		if card.Parent then
+			card:Destroy()
+		end
+	end)
+end
+
+local function playHatch(result: any)
+	hatching = true
+	local overlay = UI.new("Frame", {
+		Size = UDim2.fromScale(1, 1),
+		BackgroundColor3 = Color3.new(0, 0, 0),
+		BackgroundTransparency = 1,
+		ZIndex = 40,
+		Parent = gui,
+	})
+	UI.tween(overlay, 0.25, { BackgroundTransparency = 0.35 })
+
+	local count = #result.pets
+	local eggs = {}
+	for i = 1, count do
+		local egg = UI.label({
+			Size = UDim2.fromOffset(150, 150),
+			Position = UDim2.new(0.5, -75 + (i - (count + 1) / 2) * 180, 0.5, -90),
+			Text = "🥚",
+			ZIndex = 41,
+			Parent = overlay,
+		})
+		table.insert(eggs, egg)
+	end
+	-- Похитування яйця з наростанням.
+	for step = 1, 8 do
+		local angle = (if step % 2 == 0 then 1 else -1) * (6 + step * 2)
+		for _, egg in eggs do
+			UI.tween(egg, 0.12, { Rotation = angle })
+		end
+		task.wait(0.13)
+	end
+
+	for i, name in result.pets do
+		local def = Config.GetPetDef(name)
+		local egg = eggs[i]
+		egg.Rotation = 0
+		if def then
+			local color = Config.Rarities[def.rarity].color
+			egg.Text = def.icon
+			local scale = UI.new("UIScale", { Scale = 0.2, Parent = egg })
+			UI.tween(scale, 0.35, { Scale = 1.1 }, Enum.EasingStyle.Back)
+			UI.label({
+				Size = UDim2.new(1, 40, 0, 56),
+				Position = UDim2.new(0, -20, 1, 4),
+				Text = string.format("%s\n<font color=\"#%s\">%s</font>  %s", def.name, color:ToHex(), def.rarity, Format.Mult(def.boost)),
+				ZIndex = 42,
+				Parent = egg,
+			})
+			if Config.LuckyRarities[def.rarity] then
+				Effects.Banner("✨ " .. def.rarity:upper() .. " PET! ✨", color, 2)
+			end
+		end
+	end
+	Effects.Play("Reward", 0.7)
+	task.wait(2.2)
+	UI.tween(overlay, 0.3, { BackgroundTransparency = 1 })
+	for _, egg in eggs do
+		UI.tween(egg, 0.3, { TextTransparency = 1 })
+	end
+	task.wait(0.3)
+	overlay:Destroy()
+	hatching = false
+	local nextResult = table.remove(hatchQueue, 1)
+	if nextResult then
+		playHatch(nextResult)
+	end
+end
+
+function Effects.Hatch(result: any)
+	if hatching then
+		table.insert(hatchQueue, result)
+		return
+	end
+	task.spawn(playHatch, result)
+end
+
+return Effects
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="21">
+          <Properties>
+            <string name="Name">Hud</string>
+            <string name="Source"><![CDATA[--!nonstrict
+-- Основний HUD: статистика, таймер раунду, меню, кнопка кліку, бусти, сповіщення, підказки.
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local Config = require(ReplicatedStorage.Shared.Config)
+local Format = require(ReplicatedStorage.Shared.Format)
+local Store = require(script.Parent.Store)
+local UI = require(script.Parent.UI)
+
+local Hud = {}
+
+local refs: { [string]: any } = {}
+local notifyHolder: Frame
+
+local NOTIFY_COLORS = {
+	info = UI.Colors.PanelLight,
+	success = UI.Colors.Green,
+	warn = UI.Colors.Orange,
+	error = UI.Colors.Red,
+}
+
+function Hud.Notify(text: string, kind: string?)
+	local toast = UI.label({
+		Size = UDim2.fromOffset(420, 40),
+		BackgroundTransparency = 0.1,
+		BackgroundColor3 = NOTIFY_COLORS[kind or "info"] or UI.Colors.PanelLight,
+		Text = text,
+		TextScaled = true,
+		Parent = notifyHolder,
+	})
+	UI.corner(10).Parent = toast
+	UI.padding(6).Parent = toast
+	local scale = UI.new("UIScale", { Scale = 0.4, Parent = toast })
+	UI.tween(scale, 0.25, { Scale = 1 }, Enum.EasingStyle.Back)
+	task.delay(3.2, function()
+		UI.tween(toast, 0.3, { BackgroundTransparency = 1, TextTransparency = 1 })
+		task.wait(0.3)
+		toast:Destroy()
+	end)
+end
+
+local function statCard(parent: Instance, order: number, icon: string, color: Color3): (TextLabel, TextLabel)
+	local card = UI.new("Frame", {
+		Size = UDim2.fromOffset(230, 52),
+		BackgroundColor3 = UI.Colors.Panel,
+		BackgroundTransparency = 0.15,
+		LayoutOrder = order,
+		Parent = parent,
+	})
+	UI.corner(14).Parent = card
+	UI.stroke(color, 2.5).Parent = card
+	UI.label({ Size = UDim2.fromOffset(44, 44), Position = UDim2.fromOffset(6, 4), Text = icon, Parent = card })
+	local value = UI.label({
+		Size = UDim2.new(1, -60, 0, 30),
+		Position = UDim2.fromOffset(54, 3),
+		Text = "0",
+		TextColor3 = color,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Parent = card,
+	})
+	local sub = UI.label({
+		Size = UDim2.new(1, -60, 0, 16),
+		Position = UDim2.fromOffset(54, 33),
+		Text = "",
+		TextColor3 = UI.Colors.Muted,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Parent = card,
+	})
+	return value, sub
+end
+
+function Hud.Build(gui: ScreenGui, openPanel: (string) -> (), onClick: () -> (), sendAction: (string, any?, any?) -> ())
+	-- Статистика (зліва зверху).
+	local stats = UI.new("Frame", {
+		Size = UDim2.fromOffset(230, 180),
+		Position = UDim2.fromOffset(14, 14),
+		BackgroundTransparency = 1,
+		Parent = gui,
+	})
+	UI.new("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder, Parent = stats })
+	refs.speed, refs.speedSub = statCard(stats, 1, "⚡", UI.Colors.Speed)
+	refs.wins, refs.winsSub = statCard(stats, 2, "🏆", UI.Colors.Wins)
+	refs.rebirths, refs.rebirthsSub = statCard(stats, 3, "🌟", UI.Colors.Rebirth)
+
+	-- Таймер раунду (по центру зверху).
+	local timer = UI.new("Frame", {
+		Size = UDim2.fromOffset(320, 56),
+		Position = UDim2.new(0.5, -160, 0, 10),
+		BackgroundColor3 = UI.Colors.Panel,
+		BackgroundTransparency = 0.1,
+		Parent = gui,
+	})
+	UI.corner(16).Parent = timer
+	UI.stroke(Color3.new(0, 0, 0), 3).Parent = timer
+	refs.timerText = UI.label({ Size = UDim2.new(1, -16, 0, 34), Position = UDim2.fromOffset(8, 4), Text = "", Parent = timer })
+	local barBack = UI.new("Frame", {
+		Size = UDim2.new(1, -24, 0, 8),
+		Position = UDim2.new(0, 12, 1, -14),
+		BackgroundColor3 = Color3.fromRGB(20, 20, 30),
+		Parent = timer,
+	})
+	UI.corner(4).Parent = barBack
+	refs.timerBar = UI.new("Frame", { Size = UDim2.fromScale(0, 1), BackgroundColor3 = UI.Colors.Speed, Parent = barBack })
+	UI.corner(4).Parent = refs.timerBar
+
+	-- Сповіщення під таймером.
+	notifyHolder = UI.new("Frame", {
+		Size = UDim2.fromOffset(420, 200),
+		Position = UDim2.new(0.5, -210, 0, 76),
+		BackgroundTransparency = 1,
+		Parent = gui,
+	})
+	UI.new("UIListLayout", {
+		Padding = UDim.new(0, 6),
+		HorizontalAlignment = Enum.HorizontalAlignment.Center,
+		Parent = notifyHolder,
+	})
+
+	-- Меню (зліва).
+	local menu = UI.new("Frame", {
+		Size = UDim2.fromOffset(150, 330),
+		Position = UDim2.new(0, 14, 0.5, -110),
+		BackgroundTransparency = 1,
+		Parent = gui,
+	})
+	UI.new("UIGridLayout", {
+		CellSize = UDim2.fromOffset(70, 70),
+		CellPadding = UDim2.fromOffset(8, 8),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Parent = menu,
+	})
+	local menuItems = {
+		{ "Pets", "🐾\nPets", Color3.fromRGB(255, 140, 60) },
+		{ "Shop", "🛒\nShop", UI.Colors.Robux },
+		{ "Rebirth", "🌟\nRebirth", UI.Colors.Rebirth },
+		{ "Daily", "📅\nDaily", Color3.fromRGB(70, 160, 255) },
+		{ "Gifts", "🎁\nGifts", Color3.fromRGB(255, 80, 130) },
+		{ "Codes", "🎟️\nCodes", Color3.fromRGB(90, 200, 200) },
+		{ "Invite", "👥\nInvite", Color3.fromRGB(120, 120, 255) },
+		{ "Settings", "⚙️\nSettings", Color3.fromRGB(120, 125, 140) },
+	}
+	refs.menuButtons = {}
+	for order, item in menuItems do
+		local button = UI.button({ Text = item[2], BackgroundColor3 = item[3], LayoutOrder = order, Parent = menu }, function()
+			openPanel(item[1])
+		end)
+		refs.menuButtons[item[1]] = button
+		UI.badge(button)
+	end
+
+	-- Велика кнопка кліку (знизу по центру).
+	refs.clickButton = UI.button({
+		Size = UDim2.fromOffset(240, 84),
+		Position = UDim2.new(0.5, -120, 1, -110),
+		Text = "⚡ CLICK!",
+		BackgroundColor3 = UI.Colors.Speed,
+	}, onClick)
+	refs.clickButton.Parent = gui
+
+	refs.hint = UI.label({
+		Size = UDim2.fromOffset(520, 34),
+		Position = UDim2.new(0.5, -260, 1, -152),
+		Text = "",
+		TextColor3 = Color3.fromRGB(255, 240, 120),
+		Parent = gui,
+	})
+
+	-- Бусти й таймер подарунка (справа).
+	local right = UI.new("Frame", {
+		Size = UDim2.fromOffset(220, 300),
+		Position = UDim2.new(1, -234, 0.5, -60),
+		BackgroundTransparency = 1,
+		Parent = gui,
+	})
+	UI.new("UIListLayout", {
+		Padding = UDim.new(0, 6),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		HorizontalAlignment = Enum.HorizontalAlignment.Right,
+		Parent = right,
+	})
+	refs.giftTimer = UI.button({
+		Size = UDim2.fromOffset(220, 44),
+		Text = "🎁 Gift",
+		BackgroundColor3 = Color3.fromRGB(255, 80, 130),
+		LayoutOrder = 0,
+		Parent = right,
+	}, function()
+		openPanel("Gifts")
+	end)
+	refs.autoClick = UI.button({
+		Size = UDim2.fromOffset(220, 40),
+		Text = "🤖 Auto Click: OFF",
+		BackgroundColor3 = UI.Colors.PanelLight,
+		LayoutOrder = 1,
+		Parent = right,
+	}, function()
+		local state = Store.state
+		if not state then
+			return
+		end
+		if state.passes.AutoClicker then
+			sendAction("Setting", "autoClick", not state.settings.autoClick)
+		else
+			sendAction("BuyPass", "AutoClicker")
+		end
+	end)
+	refs.boosts = {}
+	for order, key in { "Speed2x", "Wins2x", "Lucky" } do
+		local boost = UI.label({
+			Size = UDim2.fromOffset(220, 32),
+			BackgroundTransparency = 0.15,
+			BackgroundColor3 = UI.Colors.Panel,
+			LayoutOrder = 10 + order,
+			Visible = false,
+			Parent = right,
+		})
+		UI.corner(10).Parent = boost
+		UI.padding(4).Parent = boost
+		refs.boosts[key] = boost
+	end
+
+	RunService.RenderStepped:Connect(Hud.Tick)
+end
+
+local function setBadge(name: string, text: string?)
+	local button = refs.menuButtons and refs.menuButtons[name]
+	if not button then
+		return
+	end
+	local badge = button:FindFirstChild("Badge") :: TextLabel
+	badge.Visible = text ~= nil
+	badge.Text = text or ""
+end
+
+-- Індекс наступного незабраного подарунка та скільки до нього чекати.
+function Hud.GiftStatus(): (number, number, number)
+	local state = Store.state
+	if not state then
+		return 0, 0, math.huge
+	end
+	local elapsed = Store.ServerNow() - state.joinTime
+	local ready = 0
+	local nextIndex, nextWait = 0, math.huge
+	for index, gift in Config.PlaytimeGifts do
+		if not state.giftsClaimed[index] then
+			if elapsed >= gift.time then
+				ready += 1
+			elseif gift.time - elapsed < nextWait then
+				nextIndex, nextWait = index, gift.time - elapsed
+			end
+		end
+	end
+	return ready, nextIndex, nextWait
+end
+
+local lastSecond = -1
+function Hud.Tick()
+	local state = Store.state
+	local round = Store.round
+	local now = Store.ServerNow()
+
+	-- Таймер раунду.
+	local remaining = math.max(0, round.endsAt - now)
+	if round.phase == "Lobby" then
+		refs.timerText.Text = string.format("🏁 Race in <font color=\"#FFD34D\">%d</font>s", math.ceil(remaining))
+		refs.timerBar.Size = UDim2.fromScale(math.clamp(1 - remaining / Config.Race.LobbyTime, 0, 1), 1)
+		refs.timerBar.BackgroundColor3 = UI.Colors.Speed
+	else
+		refs.timerText.Text = "🔥 RACE! 🔥"
+		refs.timerBar.Size = UDim2.fromScale(math.clamp(remaining / Config.Race.RaceTime, 0, 1), 1)
+		refs.timerBar.BackgroundColor3 = UI.Colors.Orange
+	end
+
+	if not state then
+		return
+	end
+
+	-- Статистика (з урахуванням ще не надісланих кліків — миттєвий відгук).
+	local predictedSpeed = state.speed + Store.pendingClicks * Config.Click.BaseGain * state.speedMult
+	refs.speed.Text = Format.Number(math.floor(predictedSpeed))
+	refs.speedSub.Text = "Speed  •  " .. Format.Mult(state.speedMult) .. " per click"
+	refs.wins.Text = Format.Number(math.floor(state.wins))
+	refs.winsSub.Text = "Wins  •  " .. Format.Mult(state.winsMult)
+	refs.rebirths.Text = Format.Number(state.rebirths)
+	refs.rebirthsSub.Text = "Rebirths  •  next: " .. Format.Number(state.rebirthCost) .. " 🏆"
+
+	-- Раз на секунду: бейджі, бусти, подарунки, підказки.
+	local second = math.floor(now)
+	if second == lastSecond then
+		return
+	end
+	lastSecond = second
+
+	setBadge("Daily", if state.dailyClaimedToday then nil else "!")
+	setBadge("Rebirth", if state.wins >= state.rebirthCost then "!" else nil)
+
+	local ready, _, nextWait = Hud.GiftStatus()
+	setBadge("Gifts", if ready > 0 then tostring(ready) else nil)
+	if ready > 0 then
+		refs.giftTimer.Text = string.format("🎁 %d gift%s ready!", ready, if ready > 1 then "s" else "")
+		refs.giftTimer.Visible = true
+	elseif nextWait < math.huge then
+		refs.giftTimer.Text = "🎁 Next gift: " .. Format.Time(nextWait)
+		refs.giftTimer.Visible = true
+	else
+		refs.giftTimer.Visible = false
+	end
+
+	if state.passes.AutoClicker then
+		refs.autoClick.Text = if state.settings.autoClick then "🤖 Auto Click: ON" else "🤖 Auto Click: OFF"
+		refs.autoClick.BackgroundColor3 = if state.settings.autoClick then UI.Colors.Green else UI.Colors.PanelLight
+	else
+		refs.autoClick.Text = "🤖 Auto Click 🔒"
+		refs.autoClick.BackgroundColor3 = UI.Colors.PanelLight
+	end
+
+	for key, label in refs.boosts do
+		local left = Store.BoostRemaining(key)
+		label.Visible = left > 0
+		if left > 0 then
+			label.Text = string.format("%s  %s", Config.Boosts[key].name, Format.Time(left))
+		end
+	end
+
+	-- Онбординг: одна підказка за раз, що робити далі.
+	local hint = ""
+	if state.speed < 10 and state.races == 0 then
+		hint = "👆 Tap anywhere or press CLICK to gain Speed!"
+	elseif state.races == 0 then
+		hint = "🏁 Wait for the race — the faster you are, the further you run!"
+	elseif #state.pets == 0 and state.wins >= Config.Eggs[1].cost then
+		hint = "🥚 Open an egg! Pets multiply your Speed"
+	elseif state.rebirths == 0 and state.wins >= state.rebirthCost then
+		hint = "🌟 You can REBIRTH! Open the Rebirth menu"
+	else
+		-- Видима найближча мета: скільки швидкості до наступної зони.
+		local zone = Config.ZoneForDistance(Config.DistanceForSpeed(predictedSpeed))
+		if zone < Config.Race.ZoneCount then
+			hint = string.format("🎯 Zone %d at %s ⚡", zone + 1, Format.Number(math.ceil(Config.SpeedForZone(zone + 1))))
+		end
+	end
+	refs.hint.Text = hint
+end
+
+function Hud.PulseClick()
+	local scale = refs.clickButton and refs.clickButton:FindFirstChildOfClass("UIScale")
+	if scale then
+		scale.Scale = 0.93
+		UI.tween(scale, 0.12, { Scale = 1 })
+	end
+end
+
+return Hud
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="22">
+          <Properties>
+            <string name="Name">Panels</string>
+            <string name="Source"><![CDATA[--!nonstrict
+-- Модальні вікна: Pets, Shop, Rebirth, Daily, Gifts, Codes, Settings.
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local Config = require(ReplicatedStorage.Shared.Config)
+local Format = require(ReplicatedStorage.Shared.Format)
+local Store = require(script.Parent.Store)
+local UI = require(script.Parent.UI)
+
+local Panels = {}
+
+type Panel = {
+	frame: Frame,
+	refresh: (state: any) -> (),
+	tick: (() -> ())?,
+}
+
+local panels: { [string]: Panel } = {}
+local window: Frame
+local titleLabel: TextLabel
+local current: string? = nil
+local send: (string, any?, any?) -> () = function() end
+
+local TITLES = {
+	Pets = "🐾 Pets",
+	Shop = "🛒 Shop",
+	Rebirth = "🌟 Rebirth",
+	Daily = "📅 Daily Rewards",
+	Gifts = "🎁 Playtime Gifts",
+	Codes = "🎟️ Codes",
+	Settings = "⚙️ Settings",
+}
+
+local function rarityColor(name: string): Color3
+	local def = Config.GetPetDef(name)
+	return if def then Config.Rarities[def.rarity].color else Color3.new(1, 1, 1)
+end
+
+-- Текст нагороди з урахуванням множника ребьорту (як рахує сервер).
+function Panels.DescribeReward(reward: any): string
+	local state = Store.state
+	local rebirthMult = 1 + (if state then state.rebirths else 0)
+	local parts = {}
+	if reward.kind == "Wins" then
+		table.insert(parts, Format.Number(math.floor(reward.amount * rebirthMult)) .. " 🏆")
+	elseif reward.kind == "Boost" then
+		table.insert(parts, Config.Boosts[reward.boost].name .. " " .. Format.Time(reward.seconds))
+	end
+	if reward.bonusWins then
+		table.insert(parts, Format.Number(math.floor(reward.bonusWins * rebirthMult)) .. " 🏆")
+	end
+	return table.concat(parts, "\n+ ")
+end
+
+local function scrolling(parent: Instance, cell: UDim2?): ScrollingFrame
+	local frame = UI.new("ScrollingFrame", {
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ScrollBarThickness = 8,
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		CanvasSize = UDim2.new(),
+		Parent = parent,
+	}) :: ScrollingFrame
+	if cell then
+		UI.new("UIGridLayout", {
+			CellSize = cell,
+			CellPadding = UDim2.fromOffset(8, 8),
+			SortOrder = Enum.SortOrder.LayoutOrder,
+			Parent = frame,
+		})
+	else
+		UI.new("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder, Parent = frame })
+	end
+	UI.padding(4).Parent = frame
+	return frame
+end
+
+local function clearChildren(frame: Instance)
+	for _, child in frame:GetChildren() do
+		if child:IsA("GuiObject") then
+			child:Destroy()
+		end
+	end
+end
+
+---------------------------------------------------------------------------
+-- Pets
+---------------------------------------------------------------------------
+local function buildPets(content: Frame): Panel
+	local header = UI.new("Frame", { Size = UDim2.new(1, 0, 0, 40), BackgroundTransparency = 1, Parent = content })
+	local info = UI.label({ Size = UDim2.new(0.42, 0, 1, 0), TextXAlignment = Enum.TextXAlignment.Left, Text = "", Parent = header })
+	UI.button({ Size = UDim2.new(0.18, 0, 1, 0), Position = UDim2.fromScale(0.42, 0), Text = "Equip Best", BackgroundColor3 = UI.Colors.Green, Parent = header }, function()
+		send("EquipBest")
+	end)
+	local auto = UI.button({ Size = UDim2.new(0.2, -6, 1, 0), Position = UDim2.new(0.6, 6, 0, 0), Text = "Auto: ON", BackgroundColor3 = UI.Colors.Speed, Parent = header }, function()
+		local state = Store.state
+		if state then
+			send("Setting", "autoEquip", not state.settings.autoEquip)
+		end
+	end)
+	UI.button({ Size = UDim2.new(0.2, -6, 1, 0), Position = UDim2.new(0.8, 6, 0, 0), Text = "🗑 Commons", BackgroundColor3 = UI.Colors.Red, Parent = header }, function()
+		send("DeleteRarity", "Common")
+	end)
+
+	local body = UI.new("Frame", { Size = UDim2.new(1, 0, 1, -48), Position = UDim2.fromOffset(0, 48), BackgroundTransparency = 1, Parent = content })
+	local grid = scrolling(body, UDim2.fromOffset(104, 124))
+	local empty = UI.label({ Size = UDim2.new(1, 0, 0, 40), Text = "No pets yet — open an egg in the lobby! 🥚", Parent = body })
+
+	local signature = ""
+	return {
+		frame = content,
+		refresh = function(state)
+			local equipped = 0
+			for _, pet in state.pets do
+				if pet.equipped then
+					equipped += 1
+				end
+			end
+			info.Text = string.format("Equipped %d/%d  •  %s  •  %d/%d", equipped, state.equipSlots, Format.Mult(state.petMult), #state.pets, Config.Pets.InventoryLimit)
+			auto.Text = if state.settings.autoEquip then "Auto: ON" else "Auto: OFF"
+			empty.Visible = #state.pets == 0
+
+			local parts = {}
+			for _, pet in state.pets do
+				table.insert(parts, pet.uid .. (if pet.equipped then "1" else "0"))
+			end
+			local newSignature = table.concat(parts, ",")
+			if newSignature == signature then
+				return
+			end
+			signature = newSignature
+
+			clearChildren(grid)
+			local sorted = table.clone(state.pets)
+			table.sort(sorted, function(a, b)
+				if a.equipped ~= b.equipped then
+					return a.equipped
+				end
+				local da, db = Config.GetPetDef(a.name), Config.GetPetDef(b.name)
+				return (if da then da.boost else 0) > (if db then db.boost else 0)
+			end)
+			for order, pet in sorted do
+				local def = Config.GetPetDef(pet.name)
+				if def then
+					local color = rarityColor(pet.name)
+					local card = UI.button({
+						Text = "",
+						LayoutOrder = order,
+						BackgroundColor3 = color:Lerp(UI.Colors.Panel, 0.55),
+						Parent = grid,
+					}, function()
+						send("Equip", pet.uid, not pet.equipped)
+					end)
+					local stroke = card:FindFirstChildOfClass("UIStroke")
+					if stroke then
+						stroke.Color = if pet.equipped then UI.Colors.Green else color
+						stroke.Thickness = if pet.equipped then 4 else 2.5
+					end
+					UI.label({ Size = UDim2.new(1, 0, 0, 52), Position = UDim2.fromOffset(0, 6), Text = def.icon, Parent = card })
+					UI.label({ Size = UDim2.new(1, -8, 0, 22), Position = UDim2.fromOffset(4, 60), Text = def.name, Parent = card })
+					UI.label({ Size = UDim2.new(1, -8, 0, 20), Position = UDim2.fromOffset(4, 82), Text = Format.Mult(def.boost), TextColor3 = UI.Colors.Speed, Parent = card })
+					UI.label({ Size = UDim2.new(1, -8, 0, 14), Position = UDim2.fromOffset(4, 104), Text = def.rarity, TextColor3 = color, Parent = card })
+					if pet.equipped then
+						UI.label({ Size = UDim2.fromOffset(24, 24), Position = UDim2.fromOffset(4, 4), Text = "✅", Parent = card })
+					else
+						local del = UI.button({
+							Size = UDim2.fromOffset(24, 24),
+							Position = UDim2.new(1, -28, 0, 4),
+							Text = "✕",
+							BackgroundColor3 = UI.Colors.Red,
+							Parent = card,
+						}, function()
+							send("Delete", pet.uid)
+						end)
+						del.ZIndex = 3
+					end
+				end
+			end
+		end,
+	}
+end
+
+---------------------------------------------------------------------------
+-- Shop
+---------------------------------------------------------------------------
+local function shopCard(parent: Instance, order: number, title: string, desc: string, priceText: string, color: Color3, tag: string?, onBuy: () -> ()): TextButton
+	local card = UI.new("Frame", {
+		Size = UDim2.new(1, -8, 0, 70),
+		BackgroundColor3 = UI.Colors.PanelLight,
+		LayoutOrder = order,
+		Parent = parent,
+	})
+	UI.corner(12).Parent = card
+	UI.stroke(color, 2.5).Parent = card
+	UI.label({ Size = UDim2.new(0.68, -12, 0, 30), Position = UDim2.fromOffset(12, 6), Text = title, TextXAlignment = Enum.TextXAlignment.Left, Parent = card })
+	UI.label({
+		Size = UDim2.new(0.68, -12, 0, 22),
+		Position = UDim2.fromOffset(12, 40),
+		Text = desc,
+		TextColor3 = UI.Colors.Muted,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Parent = card,
+	})
+	if tag then
+		local tagLabel = UI.label({
+			Size = UDim2.fromOffset(100, 20),
+			Position = UDim2.new(0.68, -110, 0, -8),
+			BackgroundTransparency = 0,
+			BackgroundColor3 = UI.Colors.Red,
+			Text = tag,
+			Parent = card,
+		})
+		UI.corner(6).Parent = tagLabel
+	end
+	return UI.button({
+		Size = UDim2.new(0.3, -8, 0, 46),
+		Position = UDim2.new(0.7, 0, 0, 12),
+		Text = priceText,
+		BackgroundColor3 = UI.Colors.Robux,
+		Parent = card,
+	}, onBuy)
+end
+
+local function sectionTitle(parent: Instance, order: number, text: string)
+	UI.label({ Size = UDim2.new(1, -8, 0, 32), Text = text, LayoutOrder = order, TextXAlignment = Enum.TextXAlignment.Left, Parent = parent })
+end
+
+local function buildShop(content: Frame): Panel
+	local list = scrolling(content)
+	local signature = ""
+	return {
+		frame = content,
+		refresh = function(state)
+			local owned = {}
+			for _, pass in Config.GamePasses do
+				table.insert(owned, if state.passes[pass.key] then "1" else "0")
+			end
+			local newSignature = table.concat(owned) .. "|" .. state.rebirths
+			if newSignature == signature then
+				return
+			end
+			signature = newSignature
+			clearChildren(list)
+
+			local order = 0
+			local function nextOrder()
+				order += 1
+				return order
+			end
+			sectionTitle(list, nextOrder(), "⚡ Boosts & Wins")
+			for _, product in Config.Products do
+				local desc = if product.kind == "Wins"
+					then "+" .. Format.Number(math.floor(product.amount * (1 + state.rebirths))) .. " 🏆 Wins instantly"
+					else "Stacks with everything. Timer adds up!"
+				shopCard(list, nextOrder(), product.name, desc, " R$ " .. product.price, UI.Colors.Wins, product.tag, function()
+					send("BuyProduct", product.key)
+				end)
+			end
+			sectionTitle(list, nextOrder(), "💎 Game Passes (forever)")
+			for _, pass in Config.GamePasses do
+				local isOwned = state.passes[pass.key] == true
+				local button = shopCard(list, nextOrder(), pass.name, pass.desc, if isOwned then "OWNED ✅" else " R$ " .. pass.price, UI.Colors.Rebirth, nil, function()
+					if not isOwned then
+						send("BuyPass", pass.key)
+					end
+				end)
+				if isOwned then
+					button.BackgroundColor3 = UI.Colors.PanelLight
+				end
+			end
+		end,
+	}
+end
+
+---------------------------------------------------------------------------
+-- Rebirth
+---------------------------------------------------------------------------
+local function buildRebirth(content: Frame): Panel
+	local title = UI.label({ Size = UDim2.new(1, 0, 0, 40), Text = "", Parent = content })
+	local benefits = UI.label({ Size = UDim2.new(1, 0, 0, 90), Position = UDim2.fromOffset(0, 48), Text = "", Parent = content })
+	local barBack = UI.new("Frame", {
+		Size = UDim2.new(0.9, 0, 0, 30),
+		Position = UDim2.new(0.05, 0, 0, 150),
+		BackgroundColor3 = Color3.fromRGB(20, 20, 30),
+		Parent = content,
+	})
+	UI.corner(10).Parent = barBack
+	local bar = UI.new("Frame", { Size = UDim2.fromScale(0, 1), BackgroundColor3 = UI.Colors.Wins, Parent = barBack })
+	UI.corner(10).Parent = bar
+	local barText = UI.label({ Size = UDim2.fromScale(1, 1), Text = "", ZIndex = 2, Parent = barBack })
+	UI.label({
+		Size = UDim2.new(1, 0, 0, 24),
+		Position = UDim2.fromOffset(0, 188),
+		Text = "⚠️ Rebirth resets your Speed. Pets and Wins left over stay!",
+		TextColor3 = UI.Colors.Muted,
+		Parent = content,
+	})
+	local button = UI.button({
+		Size = UDim2.new(0.5, 0, 0, 60),
+		Position = UDim2.new(0.25, 0, 0, 226),
+		Text = "🌟 REBIRTH",
+		BackgroundColor3 = UI.Colors.Rebirth,
+		Parent = content,
+	}, function()
+		send("Rebirth")
+	end)
+	return {
+		frame = content,
+		refresh = function(state)
+			local cost = state.rebirthCost
+			title.Text = string.format("Rebirths: <font color=\"#C86EFF\">%s</font>", Format.Number(state.rebirths))
+			local nowSpeed = 1 + state.rebirths * Config.Rebirth.SpeedMultPerRebirth
+			local nextSpeed = nowSpeed + Config.Rebirth.SpeedMultPerRebirth
+			local nowWins = 1 + state.rebirths * Config.Rebirth.WinsMultPerRebirth
+			local nextWins = nowWins + Config.Rebirth.WinsMultPerRebirth
+			benefits.Text = string.format(
+				"⚡ Speed per click: %s → <font color=\"#7CFF6B\">%s</font>\n🏆 Wins bonus: %s → <font color=\"#7CFF6B\">%s</font>\n🎁 Rewards & packs: %s → <font color=\"#7CFF6B\">%s</font>",
+				Format.Mult(nowSpeed),
+				Format.Mult(nextSpeed),
+				Format.Mult(nowWins),
+				Format.Mult(nextWins),
+				Format.Mult(1 + state.rebirths),
+				Format.Mult(2 + state.rebirths)
+			)
+			local progress = math.clamp(state.wins / cost, 0, 1)
+			bar.Size = UDim2.fromScale(progress, 1)
+			barText.Text = Format.Number(math.floor(state.wins)) .. " / " .. Format.Number(cost) .. " 🏆"
+			button.BackgroundColor3 = if progress >= 1 then UI.Colors.Rebirth else UI.Colors.PanelLight
+		end,
+	}
+end
+
+---------------------------------------------------------------------------
+-- Daily
+---------------------------------------------------------------------------
+local function buildDaily(content: Frame): Panel
+	local holder = UI.new("Frame", { Size = UDim2.new(1, 0, 0, 230), BackgroundTransparency = 1, Parent = content })
+	UI.new("UIGridLayout", {
+		CellSize = UDim2.new(0.25, -8, 0, 110),
+		CellPadding = UDim2.fromOffset(8, 8),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		HorizontalAlignment = Enum.HorizontalAlignment.Center,
+		Parent = holder,
+	})
+	local cards = {}
+	for day, reward in Config.DailyRewards do
+		local card = UI.new("Frame", { BackgroundColor3 = UI.Colors.PanelLight, LayoutOrder = day, Parent = holder })
+		UI.corner(12).Parent = card
+		local stroke = UI.stroke(Color3.new(0, 0, 0), 2.5)
+		stroke.Parent = card
+		UI.label({ Size = UDim2.new(1, 0, 0, 26), Position = UDim2.fromOffset(0, 4), Text = "Day " .. day, Parent = card })
+		local text = UI.label({ Size = UDim2.new(1, -8, 0, 70), Position = UDim2.fromOffset(4, 34), Text = "", Parent = card })
+		cards[day] = { card = card, stroke = stroke, text = text, reward = reward }
+	end
+	local claim = UI.button({
+		Size = UDim2.new(0.5, 0, 0, 54),
+		Position = UDim2.new(0.25, 0, 0, 244),
+		Text = "CLAIM",
+		Parent = content,
+	}, function()
+		send("ClaimDaily")
+	end)
+	return {
+		frame = content,
+		refresh = function(state)
+			-- День, який буде виданий наступним (або вже виданий сьогодні).
+			local nextDay = state.dailyDay
+			for day, info in cards do
+				info.text.Text = Panels.DescribeReward(info.reward)
+				local isNext = day == nextDay
+				info.stroke.Color = if isNext then UI.Colors.Wins else Color3.new(0, 0, 0)
+				info.stroke.Thickness = if isNext then 4 else 2.5
+				info.card.BackgroundColor3 = if day < nextDay or (isNext and state.dailyClaimedToday) then UI.Colors.Green:Lerp(UI.Colors.Panel, 0.5) else UI.Colors.PanelLight
+			end
+			claim.Text = if state.dailyClaimedToday then "Come back tomorrow! ⏰" else "CLAIM DAY " .. nextDay
+			claim.BackgroundColor3 = if state.dailyClaimedToday then UI.Colors.PanelLight else UI.Colors.Green
+		end,
+	}
+end
+
+---------------------------------------------------------------------------
+-- Gifts
+---------------------------------------------------------------------------
+local function buildGifts(content: Frame): Panel
+	local grid = scrolling(content, UDim2.new(0.25, -8, 0, 140))
+	local buttons = {}
+	for index, gift in Config.PlaytimeGifts do
+		local card = UI.new("Frame", { BackgroundColor3 = UI.Colors.PanelLight, LayoutOrder = index, Parent = grid })
+		UI.corner(12).Parent = card
+		UI.label({ Size = UDim2.new(1, 0, 0, 30), Position = UDim2.fromOffset(0, 4), Text = "🎁", Parent = card })
+		local text = UI.label({ Size = UDim2.new(1, -8, 0, 46), Position = UDim2.fromOffset(4, 36), Text = "", Parent = card })
+		local button = UI.button({
+			Size = UDim2.new(1, -12, 0, 40),
+			Position = UDim2.new(0, 6, 1, -46),
+			Text = "",
+			Parent = card,
+		}, function()
+			send("ClaimGift", index)
+		end)
+		buttons[index] = { button = button, text = text, gift = gift }
+	end
+	local function tick()
+		local state = Store.state
+		if not state then
+			return
+		end
+		local elapsed = Store.ServerNow() - state.joinTime
+		for index, info in buttons do
+			info.text.Text = Panels.DescribeReward(info.gift)
+			if state.giftsClaimed[index] then
+				info.button.Text = "✅"
+				info.button.BackgroundColor3 = UI.Colors.PanelLight
+			elseif elapsed >= info.gift.time then
+				info.button.Text = "CLAIM"
+				info.button.BackgroundColor3 = UI.Colors.Green
+			else
+				info.button.Text = Format.Time(info.gift.time - elapsed)
+				info.button.BackgroundColor3 = UI.Colors.Panel
+			end
+		end
+	end
+	return { frame = content, refresh = function() tick() end, tick = tick }
+end
+
+---------------------------------------------------------------------------
+-- Codes
+---------------------------------------------------------------------------
+local function buildCodes(content: Frame): Panel
+	UI.label({
+		Size = UDim2.new(1, 0, 0, 50),
+		Text = "Find new codes in the game description\nand our community group! 🔔",
+		TextColor3 = UI.Colors.Muted,
+		Parent = content,
+	})
+	local box = UI.new("TextBox", {
+		Size = UDim2.new(0.8, 0, 0, 56),
+		Position = UDim2.new(0.1, 0, 0, 70),
+		BackgroundColor3 = Color3.fromRGB(20, 20, 30),
+		PlaceholderText = "Enter code...",
+		Text = "",
+		Font = UI.Font,
+		TextScaled = true,
+		TextColor3 = UI.Colors.Text,
+		ClearTextOnFocus = false,
+		Parent = content,
+	}) :: TextBox
+	UI.corner(12).Parent = box
+	UI.padding(8).Parent = box
+	UI.button({ Size = UDim2.new(0.5, 0, 0, 54), Position = UDim2.new(0.25, 0, 0, 142), Text = "REDEEM", Parent = content }, function()
+		send("Code", box.Text)
+		box.Text = ""
+	end)
+	return { frame = content, refresh = function() end }
+end
+
+---------------------------------------------------------------------------
+-- Settings
+---------------------------------------------------------------------------
+Panels.HideOtherPets = false
+
+local function buildSettings(content: Frame): Panel
+	local list = scrolling(content)
+	local function toggle(order: number, onClick: () -> ()): TextButton
+		return UI.button({ Size = UDim2.new(1, -8, 0, 54), LayoutOrder = order, Text = "", Parent = list }, onClick)
+	end
+	local autoEquip = toggle(1, function()
+		local state = Store.state
+		if state then
+			send("Setting", "autoEquip", not state.settings.autoEquip)
+		end
+	end)
+	local autoClick = toggle(2, function()
+		local state = Store.state
+		if state then
+			if state.passes.AutoClicker then
+				send("Setting", "autoClick", not state.settings.autoClick)
+			else
+				send("BuyPass", "AutoClicker")
+			end
+		end
+	end)
+	local hidePets: TextButton
+	hidePets = toggle(3, function()
+		Panels.HideOtherPets = not Panels.HideOtherPets
+		hidePets.Text = "Hide other players' pets: " .. (if Panels.HideOtherPets then "ON" else "OFF")
+	end)
+	hidePets.Text = "Hide other players' pets: OFF"
+	return {
+		frame = content,
+		refresh = function(state)
+			autoEquip.Text = "Auto-equip best pets: " .. (if state.settings.autoEquip then "ON" else "OFF")
+			autoEquip.BackgroundColor3 = if state.settings.autoEquip then UI.Colors.Green else UI.Colors.PanelLight
+			autoClick.Text = if state.passes.AutoClicker
+				then "Auto Clicker: " .. (if state.settings.autoClick then "ON" else "OFF")
+				else "Auto Clicker 🔒 (Game Pass)"
+			autoClick.BackgroundColor3 = if state.passes.AutoClicker and state.settings.autoClick then UI.Colors.Green else UI.Colors.PanelLight
+		end,
+	}
+end
+
+---------------------------------------------------------------------------
+
+function Panels.Build(gui: ScreenGui, sendAction: (string, any?, any?) -> ())
+	send = sendAction
+	window = UI.new("Frame", {
+		Name = "Window",
+		Size = UDim2.fromOffset(620, 420),
+		Position = UDim2.fromScale(0.5, 0.5),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundColor3 = UI.Colors.Panel,
+		Visible = false,
+		ZIndex = 10,
+		Parent = gui,
+	})
+	UI.corner(18).Parent = window
+	UI.stroke(Color3.new(0, 0, 0), 4).Parent = window
+	UI.new("UIScale", { Parent = window })
+	titleLabel = UI.label({ Size = UDim2.new(1, -120, 0, 44), Position = UDim2.fromOffset(16, 8), Text = "", TextXAlignment = Enum.TextXAlignment.Left, Parent = window })
+	UI.button({
+		Size = UDim2.fromOffset(44, 44),
+		Position = UDim2.new(1, -54, 0, 8),
+		Text = "✕",
+		BackgroundColor3 = UI.Colors.Red,
+		Parent = window,
+	}, function()
+		Panels.Close()
+	end)
+
+	local builders: { [string]: (Frame) -> Panel } = {
+		Pets = buildPets,
+		Shop = buildShop,
+		Rebirth = buildRebirth,
+		Daily = buildDaily,
+		Gifts = buildGifts,
+		Codes = buildCodes,
+		Settings = buildSettings,
+	}
+	for name, builder in builders do
+		local content = UI.new("Frame", {
+			Name = name,
+			Size = UDim2.new(1, -32, 1, -72),
+			Position = UDim2.fromOffset(16, 60),
+			BackgroundTransparency = 1,
+			Visible = false,
+			Parent = window,
+		})
+		panels[name] = builder(content)
+	end
+
+	Store.Changed:Connect(function(state)
+		if current and panels[current] then
+			panels[current].refresh(state)
+		end
+	end)
+
+	local accumulator = 0
+	RunService.Heartbeat:Connect(function(dt)
+		accumulator += dt
+		if accumulator < 0.5 then
+			return
+		end
+		accumulator = 0
+		local panel = current and panels[current]
+		if panel and panel.tick then
+			panel.tick()
+		end
+	end)
+end
+
+function Panels.Open(name: string)
+	local panel = panels[name]
+	if not panel then
+		return
+	end
+	if current == name then
+		Panels.Close()
+		return
+	end
+	if current and panels[current] then
+		panels[current].frame.Visible = false
+	end
+	current = name
+	titleLabel.Text = TITLES[name] or name
+	panel.frame.Visible = true
+	if Store.state then
+		panel.refresh(Store.state)
+	end
+	window.Visible = true
+	local scale = window:FindFirstChildOfClass("UIScale") :: UIScale
+	scale.Scale = 0.6
+	UI.tween(scale, 0.25, { Scale = 1 }, Enum.EasingStyle.Back)
+end
+
+function Panels.Close()
+	if current and panels[current] then
+		panels[current].frame.Visible = false
+	end
+	current = nil
+	window.Visible = false
+end
+
+return Panels
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="23">
+          <Properties>
+            <string name="Name">PetsVisual</string>
+            <string name="Source"><![CDATA[--!nonstrict
+-- Малює екіпірованих улюбленців біля кожного гравця (лише на клієнті — без навантаження на сервер).
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local Config = require(ReplicatedStorage.Shared.Config)
+local Panels = require(script.Parent.Panels)
+
+local localPlayer = Players.LocalPlayer
+
+local PetsVisual = {}
+
+local folder: Folder
+local owned: { [Player]: { text: string, parts: { BasePart } } } = {}
+
+local function makePet(name: string): BasePart
+	local def = Config.GetPetDef(name)
+	local color = if def then Config.Rarities[def.rarity].color else Color3.new(1, 1, 1)
+	local part = Instance.new("Part")
+	part.Name = name
+	part.Anchored = true
+	part.CanCollide = false
+	part.CanQuery = false
+	part.CanTouch = false
+	part.Transparency = 1
+	part.Size = Vector3.one
+
+	local gui = Instance.new("BillboardGui")
+	gui.Size = UDim2.fromScale(3.2, 3.2)
+	gui.LightInfluence = 0
+	gui.MaxDistance = 150
+	gui.Parent = part
+
+	local glow = Instance.new("Frame")
+	glow.Size = UDim2.fromScale(0.8, 0.8)
+	glow.Position = UDim2.fromScale(0.1, 0.1)
+	glow.BackgroundColor3 = color
+	glow.BackgroundTransparency = 0.55
+	glow.Parent = gui
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(1, 0)
+	corner.Parent = glow
+
+	local icon = Instance.new("TextLabel")
+	icon.Size = UDim2.fromScale(1, 1)
+	icon.BackgroundTransparency = 1
+	icon.TextScaled = true
+	icon.Text = if def then def.icon else "?"
+	icon.Parent = gui
+
+	part.Parent = folder
+	return part
+end
+
+local function sync(player: Player)
+	local text = (player:GetAttribute("EquippedPets") :: string?) or ""
+	if player ~= localPlayer and Panels.HideOtherPets then
+		text = ""
+	end
+	local entry = owned[player]
+	if entry and entry.text == text then
+		return
+	end
+	if entry then
+		for _, part in entry.parts do
+			part:Destroy()
+		end
+	end
+	local parts = {}
+	for name in string.gmatch(text, "[^,]+") do
+		table.insert(parts, makePet(name))
+	end
+	owned[player] = { text = text, parts = parts }
+end
+
+function PetsVisual.Start()
+	folder = Instance.new("Folder")
+	folder.Name = "ClientPets"
+	folder.Parent = workspace
+
+	Players.PlayerRemoving:Connect(function(player)
+		local entry = owned[player]
+		if entry then
+			for _, part in entry.parts do
+				part:Destroy()
+			end
+		end
+		owned[player] = nil
+	end)
+
+	local syncTimer = 0
+	RunService.RenderStepped:Connect(function(dt)
+		syncTimer += dt
+		if syncTimer > 0.5 then
+			syncTimer = 0
+			for _, player in Players:GetPlayers() do
+				sync(player)
+			end
+		end
+		local now = os.clock()
+		for player, entry in owned do
+			local character = player.Character
+			local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
+			if root then
+				local count = #entry.parts
+				for index, part in entry.parts do
+					-- Дугою позаду гравця, з легким підстрибуванням.
+					local spread = if count > 1 then (index - 1) / (count - 1) - 0.5 else 0
+					local angle = spread * math.rad(110)
+					local radius = 6 + math.floor((index - 1) / 4) * 2
+					local bob = math.sin(now * 4 + index) * 0.4
+					local target = root.CFrame * CFrame.new(math.sin(angle) * radius, 0.5 + bob, math.cos(angle) * radius)
+					if (part.Position - target.Position).Magnitude > 40 then
+						part.CFrame = target
+					else
+						part.CFrame = part.CFrame:Lerp(target, math.min(1, dt * 10))
+					end
+				end
+			end
+		end
+	end)
+end
+
+return PetsVisual
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="24">
+          <Properties>
+            <string name="Name">Race</string>
+            <string name="Source"><![CDATA[--!nonstrict
+-- Клієнтська анімація забігу: рухаємо свого персонажа по трасі.
+-- Нагорода вже порахована сервером, тож це лише візуал.
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local Config = require(ReplicatedStorage.Shared.Config)
+local UI = require(script.Parent.UI)
+
+local player = Players.LocalPlayer
+
+local Race = {}
+
+local controls: any = nil
+local connection: RBXScriptConnection? = nil
+local DEFAULT_FOV = 70
+
+function Race.Init()
+	task.spawn(function()
+		local ok, module = pcall(function()
+			local playerModule = player:WaitForChild("PlayerScripts"):WaitForChild("PlayerModule") :: ModuleScript
+			return (require :: any)(playerModule)
+		end)
+		if ok and module then
+			controls = module:GetControls()
+		end
+	end)
+end
+
+function Race.Start(info: { start: CFrame, distance: number, duration: number }, onZone: (number) -> ())
+	Race.Stop()
+	local character = player.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
+	if not root then
+		return
+	end
+	if controls then
+		controls:Disable()
+	end
+	local camera = workspace.CurrentCamera
+	UI.tween(camera, 0.6, { FieldOfView = 95 })
+
+	local start = info.start
+	local forward = start.LookVector
+	local velocity = info.distance / math.max(info.duration, 0.1)
+	local elapsed = 0
+	local lastZone = 0
+	connection = RunService.Heartbeat:Connect(function(dt)
+		elapsed += dt
+		local t = math.min(elapsed / info.duration, 1)
+		local distance = info.distance * t
+		root.CFrame = start + forward * distance
+		root.AssemblyLinearVelocity = if t < 1 then forward * velocity else Vector3.zero
+
+		local zone = math.min(Config.ZoneForDistance(distance), Config.Race.ZoneCount)
+		if zone > lastZone then
+			lastZone = zone
+			onZone(zone)
+		end
+		if t >= 1 and connection then
+			connection:Disconnect()
+			connection = nil
+			UI.tween(camera, 0.8, { FieldOfView = DEFAULT_FOV })
+		end
+	end)
+end
+
+function Race.Stop()
+	if connection then
+		connection:Disconnect()
+		connection = nil
+	end
+	if controls then
+		controls:Enable()
+	end
+	local camera = workspace.CurrentCamera
+	if camera.FieldOfView ~= DEFAULT_FOV then
+		UI.tween(camera, 0.5, { FieldOfView = DEFAULT_FOV })
+	end
+end
+
+return Race
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="25">
+          <Properties>
+            <string name="Name">Store</string>
+            <string name="Source"><![CDATA[--!nonstrict
+-- Останній стан гравця з сервера + сигнал змін.
+
+local Store = {}
+
+Store.state = nil :: any
+Store.round = { phase = "Lobby", endsAt = 0 } :: any
+Store.pendingClicks = 0
+
+local changed = Instance.new("BindableEvent")
+Store.Changed = changed.Event
+
+function Store.Set(state: any)
+	Store.state = state
+	changed:Fire(state)
+end
+
+function Store.ServerNow(): number
+	return workspace:GetServerTimeNow()
+end
+
+-- Скільки секунд лишилось бусту (0, якщо неактивний).
+function Store.BoostRemaining(key: string): number
+	local state = Store.state
+	if not state or not state.boosts[key] then
+		return 0
+	end
+	return math.max(0, state.boosts[key] - Store.ServerNow())
+end
+
+return Store
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="26">
+          <Properties>
+            <string name="Name">UI</string>
+            <string name="Source"><![CDATA[--!nonstrict
+-- Маленька бібліотека для побудови UI з коду + спільна тема.
+
+local TweenService = game:GetService("TweenService")
+
+local UI = {}
+
+UI.Font = Enum.Font.FredokaOne
+
+UI.Colors = {
+	Panel = Color3.fromRGB(32, 34, 52),
+	PanelLight = Color3.fromRGB(48, 52, 78),
+	Text = Color3.fromRGB(255, 255, 255),
+	Muted = Color3.fromRGB(180, 185, 210),
+	Speed = Color3.fromRGB(80, 200, 255),
+	Wins = Color3.fromRGB(255, 205, 60),
+	Rebirth = Color3.fromRGB(200, 110, 255),
+	Green = Color3.fromRGB(70, 210, 100),
+	Red = Color3.fromRGB(255, 80, 90),
+	Orange = Color3.fromRGB(255, 150, 50),
+	Robux = Color3.fromRGB(40, 190, 90),
+}
+
+function UI.new(className: string, props: { [string]: any }?, children: { Instance }?): any
+	local inst = Instance.new(className)
+	local parent = nil
+	if props then
+		for key, value in props do
+			if key == "Parent" then
+				parent = value
+			else
+				(inst :: any)[key] = value
+			end
+		end
+	end
+	if children then
+		for _, child in children do
+			child.Parent = inst
+		end
+	end
+	if parent then
+		inst.Parent = parent
+	end
+	return inst
+end
+
+function UI.corner(radius: number?): UICorner
+	return UI.new("UICorner", { CornerRadius = UDim.new(0, radius or 12) })
+end
+
+function UI.stroke(color: Color3?, thickness: number?): UIStroke
+	return UI.new("UIStroke", {
+		Color = color or Color3.new(0, 0, 0),
+		Thickness = thickness or 2.5,
+		ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+	})
+end
+
+function UI.textStroke(thickness: number?): UIStroke
+	return UI.new("UIStroke", { Thickness = thickness or 2, Color = Color3.new(0, 0, 0) })
+end
+
+function UI.padding(px: number): UIPadding
+	local u = UDim.new(0, px)
+	return UI.new("UIPadding", { PaddingTop = u, PaddingBottom = u, PaddingLeft = u, PaddingRight = u })
+end
+
+function UI.gradient(top: Color3, bottom: Color3): UIGradient
+	return UI.new("UIGradient", {
+		Color = ColorSequence.new(top, bottom),
+		Rotation = 90,
+	})
+end
+
+function UI.tween(inst: Instance, time: number, props: { [string]: any }, style: Enum.EasingStyle?, direction: Enum.EasingDirection?): Tween
+	local tween = TweenService:Create(inst, TweenInfo.new(time, style or Enum.EasingStyle.Quad, direction or Enum.EasingDirection.Out), props)
+	tween:Play()
+	return tween
+end
+
+function UI.label(props: { [string]: any }): TextLabel
+	local defaults: { [string]: any } = {
+		BackgroundTransparency = 1,
+		Font = UI.Font,
+		TextColor3 = UI.Colors.Text,
+		TextScaled = true,
+		RichText = true,
+	}
+	for key, value in props do
+		defaults[key] = value
+	end
+	local label = UI.new("TextLabel", defaults)
+	UI.textStroke(1.5).Parent = label
+	return label
+end
+
+-- Кнопка з «пружинною» анімацією натискання.
+function UI.button(props: { [string]: any }, onClick: (() -> ())?): TextButton
+	local defaults: { [string]: any } = {
+		AutoButtonColor = false,
+		Font = UI.Font,
+		TextColor3 = UI.Colors.Text,
+		TextScaled = true,
+		RichText = true,
+		BackgroundColor3 = UI.Colors.Green,
+	}
+	for key, value in props do
+		defaults[key] = value
+	end
+	local button = UI.new("TextButton", defaults) :: TextButton
+	UI.corner(12).Parent = button
+	UI.stroke(Color3.new(0, 0, 0), 2.5).Parent = button
+	UI.textStroke(1.5).Parent = button
+	UI.new("UIGradient", {
+		Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(190, 190, 190)),
+		Rotation = 90,
+	}).Parent = button
+	local scale = UI.new("UIScale", { Parent = button }) :: UIScale
+	button.MouseEnter:Connect(function()
+		UI.tween(scale, 0.12, { Scale = 1.06 })
+	end)
+	button.MouseLeave:Connect(function()
+		UI.tween(scale, 0.12, { Scale = 1 })
+	end)
+	button.MouseButton1Down:Connect(function()
+		UI.tween(scale, 0.06, { Scale = 0.92 })
+	end)
+	button.MouseButton1Up:Connect(function()
+		UI.tween(scale, 0.15, { Scale = 1 }, Enum.EasingStyle.Back)
+	end)
+	if onClick then
+		button.Activated:Connect(onClick)
+	end
+	return button
+end
+
+-- Червоний кружечок-лічильник у кутку кнопки.
+function UI.badge(parent: GuiObject): TextLabel
+	local badge = UI.label({
+		Name = "Badge",
+		Size = UDim2.fromOffset(24, 24),
+		Position = UDim2.new(1, -14, 0, -10),
+		BackgroundTransparency = 0,
+		BackgroundColor3 = UI.Colors.Red,
+		Text = "!",
+		ZIndex = 5,
+		Visible = false,
+		Parent = parent,
+	})
+	UI.corner(12).Parent = badge
+	return badge
+end
+
+return UI
+]]></string>
+          </Properties>
+        </Item>
+      </Item>
+    </Item>
+  </Item>
+  <Item class="TextChatService" referent="27">
+    <Properties>
+      <string name="Name">TextChatService</string>
+      <token name="ChatVersion">1</token>
+    </Properties>
+  </Item>
+  <Item class="Workspace" referent="28">
+    <Properties>
+      <string name="Name">Workspace</string>
+      <float name="Gravity">196.2</float>
+      <bool name="NeedsPivotMigration">false</bool>
+      <bool name="StreamingEnabled">false</bool>
+    </Properties>
+  </Item>
+</roblox>

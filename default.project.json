@@ -1,0 +1,36 @@
+{
+  "name": "TurboRaceClicker",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "Shared": { "$path": "src/shared" }
+    },
+    "ServerScriptService": {
+      "Server": { "$path": "src/server" }
+    },
+    "StarterPlayer": {
+      "StarterPlayerScripts": {
+        "Client": { "$path": "src/client" }
+      }
+    },
+    "Lighting": {
+      "$properties": {
+        "Ambient": [0.45, 0.45, 0.55],
+        "Brightness": 2.5,
+        "ClockTime": 14.5,
+        "GlobalShadows": true,
+        "OutdoorAmbient": [0.6, 0.6, 0.7]
+      }
+    },
+    "SoundService": { "$properties": { "RespectFilteringEnabled": true } },
+    "TextChatService": {
+      "$properties": { "ChatVersion": "TextChatService" }
+    },
+    "Workspace": {
+      "$properties": {
+        "Gravity": 196.2,
+        "StreamingEnabled": false
+      }
+    }
+  }
+}
