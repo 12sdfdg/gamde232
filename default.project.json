@@ -19,7 +19,8 @@
         "Brightness": 2.5,
         "ClockTime": 14.5,
         "GlobalShadows": true,
-        "OutdoorAmbient": [0.6, 0.6, 0.7]
+        "OutdoorAmbient": [0.6, 0.6, 0.7],
+        "Technology": "ShadowMap"
       }
     },
     "SoundService": { "$properties": { "RespectFilteringEnabled": true } },

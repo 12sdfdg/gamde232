@@ -15,6 +15,7 @@
         <G>0.6</G>
         <B>0.7</B>
       </Color3>
+      <token name="Technology">3</token>
     </Properties>
   </Item>
   <Item class="ReplicatedStorage" referent="1">
