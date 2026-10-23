@@ -1,0 +1,10 @@
+{
+  "name": "gamde232",
+  "tree": {
+    "$className": "DataModel",
+    "ServerScriptService": {
+      "$className": "ServerScriptService",
+      "$path": "src/ServerScriptService"
+    }
+  }
+}
