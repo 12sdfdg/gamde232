@@ -5,6 +5,10 @@
     "ServerScriptService": {
       "$className": "ServerScriptService",
       "$path": "src/ServerScriptService"
+    },
+    "StarterGui": {
+      "$className": "StarterGui",
+      "$path": "src/StarterGui"
     }
   }
 }
